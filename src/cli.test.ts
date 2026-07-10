@@ -1,10 +1,11 @@
-import { chmodSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { cursorProjectSlug } from "./agents/cursor.ts";
 import { main } from "./cli.ts";
+import { shortenDirPath } from "./format.ts";
 
 describe(main, () => {
   let fakeHome: string;
@@ -110,6 +111,40 @@ describe(main, () => {
     const listOutput = String(logMock.mock.calls.at(-1)?.[0] ?? "");
     expect(listOutput).toContain("manual");
     expect(listOutput).toMatch(/Workspace trust \(1 entry/);
+  });
+
+  it("lists only trust entries for a positional path", () => {
+    const target = path.join(fakeHome, "target");
+    const other = path.join(fakeHome, "other");
+    mkdirSync(target, { recursive: true });
+    mkdirSync(other, { recursive: true });
+    main(["add", "--agent", "claude", "--dir", target, "--home", fakeHome]);
+    main(["add", "--agent", "claude", "--dir", other, "--home", fakeHome]);
+
+    main(["list", target, "--home", fakeHome, "--agent", "claude"]);
+    const logMock = vi.mocked(console.log);
+    const listOutput = String(logMock.mock.calls.at(-1)?.[0] ?? "");
+    expect(listOutput).toMatch(/Workspace trust \(1 entry\)/);
+    expect(listOutput).toContain("target");
+    expect(listOutput).not.toContain(`${path.sep}other`);
+  });
+
+  it("reports a path-scoped empty message when nothing matches", () => {
+    const missingTrust = path.join(fakeHome, "untrusted");
+    main(["list", missingTrust, "--home", fakeHome]);
+    expect(console.log).toHaveBeenCalledWith(
+      `No workspace trust entries for ${shortenDirPath(missingTrust, fakeHome)}.`,
+    );
+  });
+
+  it("rejects a second positional path on list", () => {
+    expect(() => main(["list", ".", "extra", "--home", fakeHome])).toThrow(
+      /Unexpected argument: extra/,
+    );
+  });
+
+  it("rejects a positional path on non-list commands", () => {
+    expect(() => main(["prune", ".", "--home", fakeHome])).toThrow(/Unknown argument: \./);
   });
 
   it("exits 1 when add cannot write trust", () => {

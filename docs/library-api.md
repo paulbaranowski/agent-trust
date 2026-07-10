@@ -82,6 +82,7 @@ listAgentTrustedDirs({
   // agent: "codex", // or "cursor" | "claude"
   // homeDir: "/home/me",
   // missingOnly: true, // only paths that no longer exist on disk
+  // dirPath: "/path/to/dir", // exact match after canonicalizeWorkspacePath
 });
 ```
 
@@ -90,6 +91,7 @@ Each `AgentTrustedDir` is `{ agent, dirPath, detail, store }`.
 ```ts
 listAgentTrustedDirs();
 listAgentTrustedDirs({ agent: "codex", missingOnly: true });
+listAgentTrustedDirs({ dirPath: process.cwd() });
 ```
 
 ---

@@ -10,6 +10,8 @@ const UNPARSEABLE_CURSOR_DETAIL = "trusted (unparseable marker)";
 export interface FormatAgentTrustedDirListOptions {
   homeDir: string;
   missingOnly?: boolean;
+  /** When set, empty-list messages are scoped to this directory path. */
+  dirPath?: string;
 }
 
 export interface FormatAgentTrustActionResultsOptions {
@@ -65,6 +67,13 @@ export function formatAgentTrustedDirList(
     options.missingOnly === true ? entries.filter(isMissingAgentTrustedDir) : entries;
 
   if (displayedEntries.length === 0) {
+    if (options.dirPath !== undefined) {
+      const shortPath = shortenDirPath(options.dirPath, options.homeDir);
+      if (options.missingOnly === true) {
+        return `No stale workspace trust entries for ${shortPath}.`;
+      }
+      return `No workspace trust entries for ${shortPath}.`;
+    }
     if (options.missingOnly === true) {
       return "No stale workspace trust entries.";
     }
