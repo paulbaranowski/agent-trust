@@ -1,5 +1,5 @@
 {
-  "name": "@paulbaranowski/agent-trust",
+  "name": "agent-trust",
   "version": "1.0.0",
   "description": "Library and CLI for Cursor, Claude, and Codex workspace trust stores",
   "license": "MIT",
