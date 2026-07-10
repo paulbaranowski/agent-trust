@@ -3,8 +3,8 @@ import path from "node:path";
 
 import type { AgentTrustedDir, AgentTrustDirResult } from "../types.ts";
 import {
-  canonicalizeWorkspacePath,
   isPlainObject,
+  looksWindowsPath,
   resolveWorkspaceTrustPath,
   writeFileAtomic,
 } from "./shared.ts";
@@ -25,6 +25,12 @@ export function cursorProjectSlug(workspacePath: string): string {
   return cursorProjectSlugFromResolved(resolveWorkspaceTrustPath(workspacePath));
 }
 
+/** Identity for already-trusted compares — Windows slash forms must match. */
+function cursorWorkspaceIdentity(workspacePath: string): string {
+  const resolved = resolveWorkspaceTrustPath(workspacePath);
+  return looksWindowsPath(resolved) ? resolved.replace(/\\/g, "/") : resolved;
+}
+
 function cursorProjectsDir(homeDir: string): string {
   return path.join(homeDir, ".cursor", "projects");
 }
@@ -39,7 +45,7 @@ export function ensureCursorTrust(input: {
   homeDir: string;
   trustMethod: string;
 }): AgentTrustDirResult {
-  const absoluteWorkspacePath = resolveWorkspaceTrustPath(input.workspacePath);
+  const absoluteWorkspacePath = cursorWorkspaceIdentity(input.workspacePath);
   const markerPath = cursorWorkspaceTrustedPath(input.homeDir, input.workspacePath);
   if (existsSync(markerPath)) {
     let existing: CursorWorkspaceTrustedMarker | undefined;
@@ -51,7 +57,7 @@ export function ensureCursorTrust(input: {
     const recordedPath = existing?.workspacePath;
     if (
       recordedPath === undefined ||
-      canonicalizeWorkspacePath(recordedPath) === absoluteWorkspacePath
+      cursorWorkspaceIdentity(recordedPath) === absoluteWorkspacePath
     ) {
       return {
         ok: true,
