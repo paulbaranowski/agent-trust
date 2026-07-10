@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 import type { AgentTrustedDir, AgentTrustDirResult } from "../types.ts";
-import { isPlainObject, writeFileAtomic } from "./shared.ts";
+import { canonicalizeWorkspacePath, isPlainObject, writeFileAtomic } from "./shared.ts";
 
 interface ClaudeProjectEntry {
   hasTrustDialogAccepted?: boolean;
@@ -15,26 +15,51 @@ interface ClaudeJsonFile {
   [key: string]: unknown;
 }
 
+type ClaudeJsonReadResult =
+  | { ok: true; value: ClaudeJsonFile; missing: boolean }
+  | { ok: false; error: string };
+
 function claudeJsonPath(homeDir: string): string {
   return path.join(homeDir, ".claude.json");
 }
 
-/** Read `~/.claude.json`, recovering silently from malformed roots / projects fields. */
-function readClaudeJsonFile(jsonPath: string): ClaudeJsonFile {
-  try {
-    const parsed: unknown = JSON.parse(readFileSync(jsonPath, "utf8"));
-    if (!isPlainObject(parsed)) {
-      return {};
-    }
-    const projects = parsed["projects"];
-    if (projects !== undefined && !isPlainObject(projects)) {
-      const { projects: _ignored, ...rest } = parsed;
-      return rest;
-    }
-    return parsed;
-  } catch {
-    return {};
+/** Read `~/.claude.json`; refuse corrupt / non-object roots and invalid `projects`. */
+function readClaudeJsonFile(jsonPath: string): ClaudeJsonReadResult {
+  if (!existsSync(jsonPath)) {
+    return { ok: true, value: {}, missing: true };
   }
+  let raw: string;
+  try {
+    raw = readFileSync(jsonPath, "utf8");
+  } catch (error) {
+    return {
+      ok: false,
+      error: `agent-trust: could not read Claude trust config (${String(error)})`,
+    };
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (error) {
+    return {
+      ok: false,
+      error: `agent-trust: corrupt Claude trust config at ${jsonPath} (${String(error)})`,
+    };
+  }
+  if (!isPlainObject(parsed)) {
+    return {
+      ok: false,
+      error: `agent-trust: Claude trust config at ${jsonPath} must be a JSON object`,
+    };
+  }
+  const projects = parsed["projects"];
+  if (projects !== undefined && !isPlainObject(projects)) {
+    return {
+      ok: false,
+      error: `agent-trust: Claude trust config at ${jsonPath} has invalid projects field`,
+    };
+  }
+  return { ok: true, value: parsed, missing: false };
 }
 
 function writeClaudeJsonFile(jsonPath: string, contents: ClaudeJsonFile): void {
@@ -45,12 +70,12 @@ function findClaudeProjectKey(
   projects: Record<string, ClaudeProjectEntry>,
   workspacePath: string,
 ): string | undefined {
-  const resolved = path.resolve(workspacePath);
+  const resolved = canonicalizeWorkspacePath(workspacePath);
   if (Object.hasOwn(projects, workspacePath)) {
     return workspacePath;
   }
   for (const key of Object.keys(projects)) {
-    if (path.resolve(key) === resolved) {
+    if (canonicalizeWorkspacePath(key) === resolved) {
       return key;
     }
   }
@@ -62,13 +87,23 @@ export function ensureClaudeTrust(input: {
   homeDir: string;
   trustMethod: string;
 }): AgentTrustDirResult {
-  const absoluteWorkspacePath = path.resolve(input.workspacePath);
+  const absoluteWorkspacePath = canonicalizeWorkspacePath(input.workspacePath);
   const jsonPath = claudeJsonPath(input.homeDir);
-  const claudeJson = readClaudeJsonFile(jsonPath);
+  const read = readClaudeJsonFile(jsonPath);
+  if (!read.ok) {
+    return {
+      ok: false,
+      status: "error",
+      error: read.error,
+      agent: "claude",
+      dirPath: absoluteWorkspacePath,
+    };
+  }
+  const claudeJson = read.value;
   const projects = claudeJson.projects ?? {};
+
   const projectKey = findClaudeProjectKey(projects, absoluteWorkspacePath);
   const existing = projectKey === undefined ? undefined : projects[projectKey];
-
   if (existing?.hasTrustDialogAccepted === true) {
     return {
       ok: true,
@@ -77,7 +112,6 @@ export function ensureClaudeTrust(input: {
       dirPath: absoluteWorkspacePath,
     };
   }
-
   const keyToWrite = projectKey ?? absoluteWorkspacePath;
   projects[keyToWrite] = {
     ...existing,
@@ -108,17 +142,20 @@ export function ensureClaudeTrust(input: {
 
 export function listClaudeTrustEntries(homeDir: string): AgentTrustedDir[] {
   const jsonPath = claudeJsonPath(homeDir);
-  const claudeJson = readClaudeJsonFile(jsonPath);
-  const projects = claudeJson.projects ?? {};
+  const read = readClaudeJsonFile(jsonPath);
+  if (!read.ok) {
+    return [];
+  }
+  const projects = read.value.projects ?? {};
   const entries: AgentTrustedDir[] = [];
   // On-disk Claude stores key projects by absolute path.
   for (const [projectPath, project] of Object.entries(projects)) {
-    if (project.hasTrustDialogAccepted !== true) {
+    if (!isPlainObject(project) || project["hasTrustDialogAccepted"] !== true) {
       continue;
     }
     entries.push({
       agent: "claude",
-      dirPath: path.resolve(projectPath),
+      dirPath: canonicalizeWorkspacePath(projectPath),
       detail: "hasTrustDialogAccepted",
       store: `${jsonPath}#projects`,
     });
@@ -126,31 +163,41 @@ export function listClaudeTrustEntries(homeDir: string): AgentTrustedDir[] {
   return entries.toSorted((a, b) => a.dirPath.localeCompare(b.dirPath));
 }
 
-export function deleteClaudeTrustEntry(homeDir: string, workspacePath: string): boolean {
-  const jsonPath = claudeJsonPath(homeDir);
-  const claudeJson = readClaudeJsonFile(jsonPath);
-  const projects = claudeJson.projects ?? {};
-  const projectKey = findClaudeProjectKey(projects, workspacePath);
-  if (projectKey === undefined) {
-    return false;
-  }
+function clearClaudeProjectTrustFlags(
+  projects: Record<string, ClaudeProjectEntry>,
+  projectKey: string,
+): void {
   const existing = projects[projectKey];
-  if (existing?.hasTrustDialogAccepted !== true) {
-    return false;
+  if (existing === undefined) {
+    return;
   }
-
   const {
     hasTrustDialogAccepted: _trust,
     hasCompletedProjectOnboarding: _onboarding,
     ...rest
   } = existing;
   if (Object.keys(rest).length === 0) {
-    const { [projectKey]: _removed, ...remainingProjects } = projects;
-    claudeJson.projects = remainingProjects;
+    delete projects[projectKey];
   } else {
     projects[projectKey] = rest;
-    claudeJson.projects = projects;
   }
+}
+
+export function deleteClaudeTrustEntry(homeDir: string, workspacePath: string): boolean {
+  const jsonPath = claudeJsonPath(homeDir);
+  const read = readClaudeJsonFile(jsonPath);
+  if (!read.ok) {
+    return false;
+  }
+  const claudeJson = read.value;
+  const projects = { ...(claudeJson.projects ?? {}) };
+
+  const projectKey = findClaudeProjectKey(projects, workspacePath);
+  if (projectKey === undefined || projects[projectKey]?.hasTrustDialogAccepted !== true) {
+    return false;
+  }
+  clearClaudeProjectTrustFlags(projects, projectKey);
+  claudeJson.projects = projects;
   writeClaudeJsonFile(jsonPath, claudeJson);
   return true;
 }

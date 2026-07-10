@@ -23,11 +23,15 @@ describe(cursorProjectSlug, () => {
   it("strips the leading slash and replaces path separators with dashes", () => {
     expect(cursorProjectSlug("/Users/dev/repo/worktree")).toBe("Users-dev-repo-worktree");
   });
+
+  it("replaces unsafe path characters in the slug", () => {
+    expect(cursorProjectSlug('/Users/dev/repo:name*"weird')).toBe("Users-dev-repo-name-weird");
+  });
 });
 
 describe(cursorProjectSlugFromResolved, () => {
-  it("normalizes Windows-style separators and drive letters", () => {
-    expect(cursorProjectSlugFromResolved(String.raw`C:\Users\dev\repo`)).toBe("Users-dev-repo");
+  it("strips a leading separator before slugifying", () => {
+    expect(cursorProjectSlugFromResolved("/Users/dev/repo")).toBe("Users-dev-repo");
   });
 });
 

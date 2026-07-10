@@ -89,9 +89,11 @@ describe(ensureClaudeTrust, () => {
     });
   });
 
-  it("recovers from malformed claude.json", () => {
-    const workspacePath = path.join(fakeHome, "claude-recover");
-    writeFileSync(path.join(fakeHome, ".claude.json"), "not-json", "utf8");
+  it("returns error when ~/.claude.json is corrupt JSON and does not overwrite", () => {
+    const workspacePath = path.join(fakeHome, "claude-corrupt");
+    const claudeJsonPath = path.join(fakeHome, ".claude.json");
+    const garbage = "not-json{{{";
+    writeFileSync(claudeJsonPath, garbage, "utf8");
 
     const result = ensureClaudeTrust({
       workspacePath,
@@ -99,16 +101,49 @@ describe(ensureClaudeTrust, () => {
       trustMethod: "agent-trust",
     });
 
-    expect(result).toMatchObject({ ok: true, status: "trusted" });
-    const projects = readClaudeJson()["projects"] as Record<string, Record<string, unknown>>;
-    expect(projects[path.resolve(workspacePath)]?.["hasTrustDialogAccepted"]).toBe(true);
+    expect(result.ok).toBe(false);
+    expect(result).toMatchObject({ status: "error", agent: "claude" });
+    expect(readFileSync(claudeJsonPath, "utf8")).toBe(garbage);
   });
 
-  it("preserves unrelated fields when projects is invalid", () => {
+  it("returns error when root is a non-object JSON value", () => {
+    const workspacePath = path.join(fakeHome, "claude-array-root");
+    const claudeJsonPath = path.join(fakeHome, ".claude.json");
+    writeFileSync(claudeJsonPath, "[]\n", "utf8");
+
+    const result = ensureClaudeTrust({
+      workspacePath,
+      homeDir: fakeHome,
+      trustMethod: "agent-trust",
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result).toMatchObject({ status: "error", agent: "claude" });
+    expect(readFileSync(claudeJsonPath, "utf8")).toBe("[]\n");
+  });
+
+  it("returns error when projects is not a plain object", () => {
     const workspacePath = path.join(fakeHome, "claude-invalid-projects");
+    const claudeJsonPath = path.join(fakeHome, ".claude.json");
+    const contents = JSON.stringify({ projects: "bad", theme: "dark" });
+    writeFileSync(claudeJsonPath, contents, "utf8");
+
+    const result = ensureClaudeTrust({
+      workspacePath,
+      homeDir: fakeHome,
+      trustMethod: "agent-trust",
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result).toMatchObject({ status: "error", agent: "claude" });
+    expect(readFileSync(claudeJsonPath, "utf8")).toBe(contents);
+  });
+
+  it("preserves unrelated top-level fields when trusting a valid file", () => {
+    const workspacePath = path.join(fakeHome, "claude-theme");
     writeFileSync(
       path.join(fakeHome, ".claude.json"),
-      JSON.stringify({ projects: "bad", theme: "dark" }),
+      JSON.stringify({ theme: "dark", projects: {} }),
       "utf8",
     );
 
@@ -118,6 +153,18 @@ describe(ensureClaudeTrust, () => {
     expect(parsed["theme"]).toBe("dark");
     const projects = parsed["projects"] as Record<string, Record<string, unknown>>;
     expect(projects[path.resolve(workspacePath)]?.["hasTrustDialogAccepted"]).toBe(true);
+  });
+
+  it("uses a single key for a workspace path", () => {
+    const workspacePath = path.join(fakeHome, "posix-only");
+    ensureClaudeTrust({
+      workspacePath,
+      homeDir: fakeHome,
+      trustMethod: "agent-trust",
+    });
+    const projects = readClaudeJson()["projects"] as Record<string, Record<string, unknown>>;
+    const keys = Object.keys(projects);
+    expect(keys).toEqual([path.resolve(workspacePath)]);
   });
 
   it("returns an error result when the file cannot be written", () => {
@@ -172,6 +219,24 @@ describe(listClaudeTrustEntries, () => {
   it("treats malformed claude.json as empty", () => {
     writeFileSync(path.join(fakeHome, ".claude.json"), "{not-json", "utf8");
     expect(listClaudeTrustEntries(fakeHome)).toEqual([]);
+  });
+
+  it("skips nullish project entries without throwing", () => {
+    const trustedPath = path.resolve(fakeHome, "trusted");
+    writeFileSync(
+      path.join(fakeHome, ".claude.json"),
+      JSON.stringify({
+        projects: {
+          [trustedPath]: { hasTrustDialogAccepted: true },
+          "/broken": null,
+        },
+      }),
+      "utf8",
+    );
+
+    expect(listClaudeTrustEntries(fakeHome)).toEqual([
+      expect.objectContaining({ agent: "claude", dirPath: trustedPath }),
+    ]);
   });
 });
 

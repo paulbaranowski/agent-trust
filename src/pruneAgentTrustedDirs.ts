@@ -8,6 +8,8 @@ import type { AgentTrustAgent, PruneAgentTrustedDirsResult } from "./types.ts";
 export interface PruneAgentTrustedDirsInput {
   homeDir?: string;
   agent?: AgentTrustAgent;
+  /** Override Codex config directory (`CODEX_HOME` / `~/.codex`). */
+  codexHome?: string;
   /** Test seam for `os.homedir()` failures. */
   readHome?: () => string;
 }
@@ -21,11 +23,17 @@ export function pruneAgentTrustedDirs(
     return { results: [] };
   }
 
+  const codexOptions =
+    input.codexHome === undefined ? {} : { codexHome: input.codexHome };
+
   const staleEntries = collectTrustEntries({
     homeDir: home,
     missingOnly: true,
     ...(input.agent === undefined ? {} : { agent: input.agent }),
+    ...codexOptions,
   });
 
-  return { results: staleEntries.map((entry) => deleteTrustEntrySafe(home, entry)) };
+  return {
+    results: staleEntries.map((entry) => deleteTrustEntrySafe(home, entry, codexOptions)),
+  };
 }

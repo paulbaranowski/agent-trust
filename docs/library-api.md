@@ -9,7 +9,7 @@ import {
   listAgentTrustedDirs,
   pruneAgentTrustedDirs,
   // …
-} from "@paulbaranowski/agent-trust";
+} from "agent-trust";
 ```
 
 All store I/O for `agentTrustDir` returns an `AgentTrustDirResult` instead of throwing.
@@ -30,6 +30,7 @@ agentTrustDir({
   dirPath: "/path/to/dir",
   // homeDir: "/home/me", // defaults to os.homedir()
   // trustMethod: "agent-trust", // default; Cursor only persists this
+  // codexHome: "/custom/codex", // optional; else CODEX_HOME, else ~/.codex
 });
 ```
 
@@ -41,7 +42,8 @@ agentTrustDir({
 | `{ ok: false, status: "error", error, agent?, dirPath? }`                    | I/O or home resolution failed  |
 
 `cursor-agent` is normalized to `cursor`. Claude and Codex accept `trustMethod` for API
-uniformity but do not store it.
+uniformity but do not store it. `codexHome` (also on list / untrust / prune) overrides
+where Codex `config.toml` is read and written.
 
 ---
 
@@ -220,11 +222,14 @@ formatAgentTrustActionResults(results, { homeDir, action: "remove" });
 
 ## On-disk stores
 
-| Agent  | Store                                                                         |
-| ------ | ----------------------------------------------------------------------------- |
-| Cursor | `~/.cursor/projects/<slug>/.workspace-trusted` (JSON; includes `trustMethod`) |
-| Claude | `~/.claude.json` → `projects.<absPath>.hasTrustDialogAccepted`                |
-| Codex  | `~/.codex/config.toml` → `[projects."<absPath>"]` + `trust_level = "trusted"` |
+| Agent  | Store                                                                                                                          |
+| ------ | ------------------------------------------------------------------------------------------------------------------------------ |
+| Cursor | `~/.cursor/projects/<slug>/.workspace-trusted` (JSON; includes `trustMethod`)                                                  |
+| Claude | `~/.claude.json` → `projects.<absPath>.hasTrustDialogAccepted`                                                                 |
+| Codex  | `$CODEX_HOME/config.toml` (or `codexHome`, else `~/.codex/config.toml`) → `[projects."<absPath>"]` + `trust_level = "trusted"` |
 
 The public API field is always `dirPath`. Cursor’s on-disk marker still uses the key
 `workspacePath` for compatibility with existing markers.
+
+For slug rules, marker fields, list/untrust semantics, and per-agent edge cases,
+see **[Agent trust-dir markings](agent-trust-stores.md)**.

@@ -24,6 +24,8 @@ export interface AgentUntrustDirInput {
   all?: boolean;
   /** Cursor only: restrict deletion to markers whose `trustMethod` matches. */
   trustMethod?: string;
+  /** Override Codex config directory (`CODEX_HOME` / `~/.codex`). */
+  codexHome?: string;
   /** Test seam for `os.homedir()` failures. */
   readHome?: () => string;
 }
@@ -57,14 +59,22 @@ function matchesDeleteTarget(entry: AgentTrustedDir, input: AgentUntrustDirInput
   return false;
 }
 
-function deleteTrustEntry(homeDir: string, entry: AgentTrustedDir): boolean {
+function deleteTrustEntry(
+  homeDir: string,
+  entry: AgentTrustedDir,
+  options: { codexHome?: string } = {},
+): boolean {
   switch (entry.agent) {
     case "cursor":
       return deleteCursorTrustEntry(entry.store);
     case "claude":
       return deleteClaudeTrustEntry(homeDir, entry.dirPath);
     case "codex":
-      return deleteCodexTrustEntry(homeDir, entry.dirPath);
+      return deleteCodexTrustEntry(
+        homeDir,
+        entry.dirPath,
+        options.codexHome === undefined ? {} : { codexHome: options.codexHome },
+      );
     default: {
       const unsupportedAgent: never = entry.agent;
       throw new Error(`Unsupported trust agent: ${String(unsupportedAgent)}`);
@@ -76,12 +86,13 @@ function deleteTrustEntry(homeDir: string, entry: AgentTrustedDir): boolean {
 export function deleteTrustEntrySafe(
   homeDir: string,
   entry: AgentTrustedDir,
+  options: { codexHome?: string } = {},
 ): AgentTrustMutationResult {
   try {
     return {
       agent: entry.agent,
       dirPath: entry.dirPath,
-      deleted: deleteTrustEntry(homeDir, entry),
+      deleted: deleteTrustEntry(homeDir, entry, options),
     };
   } catch (error) {
     return {
@@ -106,12 +117,18 @@ export function agentUntrustDir(input: AgentUntrustDirInput): AgentUntrustDirRes
     return { results: [] };
   }
 
+  const codexOptions =
+    input.codexHome === undefined ? {} : { codexHome: input.codexHome };
+
   const targets = collectTrustEntries({
     homeDir: home,
     ...(input.agent === undefined ? {} : { agent: input.agent }),
+    ...codexOptions,
   }).filter((entry) => matchesDeleteTarget(entry, input));
 
-  return { results: targets.map((entry) => deleteTrustEntrySafe(home, entry)) };
+  return {
+    results: targets.map((entry) => deleteTrustEntrySafe(home, entry, codexOptions)),
+  };
 }
 
 /** @internal Exported for branch-coverage tests. */

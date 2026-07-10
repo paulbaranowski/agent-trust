@@ -10,6 +10,8 @@ import type { AgentTrustAgent, AgentTrustedDir } from "./types.ts";
 export interface ListAgentTrustedDirsInput {
   agent?: AgentTrustAgent;
   homeDir?: string;
+  /** Override Codex config directory (`CODEX_HOME` / `~/.codex`). */
+  codexHome?: string;
   /** When true, only return entries whose directory path no longer exists. */
   missingOnly?: boolean;
   /** Test seam for `os.homedir()` failures. */
@@ -41,6 +43,7 @@ export function collectTrustEntries(input: {
   homeDir: string;
   agent?: AgentTrustAgent;
   missingOnly?: boolean;
+  codexHome?: string;
 }): AgentTrustedDir[] {
   const agents: AgentTrustAgent[] =
     input.agent === undefined ? ["cursor", "claude", "codex"] : [input.agent];
@@ -52,7 +55,12 @@ export function collectTrustEntries(input: {
     entries.push(...listClaudeTrustEntries(input.homeDir));
   }
   if (agents.includes("codex")) {
-    entries.push(...listCodexTrustEntries(input.homeDir));
+    entries.push(
+      ...listCodexTrustEntries(
+        input.homeDir,
+        input.codexHome === undefined ? {} : { codexHome: input.codexHome },
+      ),
+    );
   }
   const filtered =
     input.missingOnly === true ? entries.filter(isMissingAgentTrustedDir) : entries;
@@ -72,5 +80,6 @@ export function listAgentTrustedDirs(input: ListAgentTrustedDirsInput = {}): Age
     homeDir: home,
     ...(input.agent === undefined ? {} : { agent: input.agent }),
     ...(input.missingOnly === undefined ? {} : { missingOnly: input.missingOnly }),
+    ...(input.codexHome === undefined ? {} : { codexHome: input.codexHome }),
   });
 }

@@ -1,4 +1,4 @@
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -10,6 +10,7 @@ import {
   listCodexTrustEntries,
   listCodexTrustedProjects,
   removeCodexProjectTrust,
+  resolveCodexHome,
 } from "./codex.ts";
 
 describe(codexProjectTableHeader, () => {
@@ -19,9 +20,9 @@ describe(codexProjectTableHeader, () => {
     );
   });
 
-  it("escapes backslashes and double quotes", () => {
-    expect(codexProjectTableHeader(String.raw`/tmp\weird"path`)).toBe(
-      String.raw`[projects."/tmp\\weird\"path"]`,
+  it("builds the projects table header with JSON.stringify escaping", () => {
+    expect(codexProjectTableHeader('/tmp/weird"path')).toBe(
+      `[projects.${JSON.stringify('/tmp/weird"path')}]`,
     );
   });
 });
@@ -41,6 +42,21 @@ describe(ensureCodexTrust, () => {
   function configPath(): string {
     return path.join(fakeHome, ".codex", "config.toml");
   }
+
+  it("writes under CODEX_HOME when provided", () => {
+    const workspacePath = path.join(fakeHome, "codex-home-ws");
+    const fakeCodexHome = path.join(fakeHome, "custom-codex");
+    const result = ensureCodexTrust({
+      workspacePath,
+      homeDir: fakeHome,
+      trustMethod: "agent-trust",
+      codexHome: fakeCodexHome,
+    });
+    expect(result).toMatchObject({ ok: true, status: "trusted", agent: "codex" });
+    const customConfig = path.join(fakeCodexHome, "config.toml");
+    expect(readFileSync(customConfig, "utf8")).toContain("trust_level = \"trusted\"");
+    expect(() => readConfig()).toThrow();
+  });
 
   it("trusts a new workspace", () => {
     const workspacePath = path.join(fakeHome, "codex-ws");
@@ -62,6 +78,27 @@ describe(ensureCodexTrust, () => {
     expect(result.status).toBe("already-trusted");
     expect(readConfig()).toBe(existing);
     expect(statSync(configPath()).mtimeMs).toBe(before);
+  });
+
+  it("treats a symlink-alias header as already trusted for the realpath", () => {
+    const real = path.join(fakeHome, "real-ws");
+    const link = path.join(fakeHome, "link-ws");
+    mkdirSync(real);
+    symlinkSync(real, link);
+    const aliasHeader = codexProjectTableHeader(link);
+    mkdirSync(path.join(fakeHome, ".codex"), { recursive: true });
+    writeFileSync(configPath(), `${aliasHeader}\ntrust_level = "trusted"\n`, "utf8");
+
+    const result = ensureCodexTrust({
+      workspacePath: real,
+      homeDir: fakeHome,
+      trustMethod: "agent-trust",
+    });
+    expect(result.status).toBe("already-trusted");
+    expect(readConfig()).toBe(`${aliasHeader}\ntrust_level = "trusted"\n`);
+
+    expect(deleteCodexTrustEntry(fakeHome, real)).toBe(true);
+    expect(readConfig().trim()).toBe("");
   });
 
   it("preserves unrelated config settings", () => {
@@ -273,5 +310,32 @@ describe(deleteCodexTrustEntry, () => {
     expect(deleteCodexTrustEntry(fakeHome, workspacePath)).toBe(true);
     expect(listCodexTrustEntries(fakeHome)).toEqual([]);
     rmSync(fakeHome, { recursive: true, force: true });
+  });
+});
+
+describe(resolveCodexHome, () => {
+  it("prefers an explicit codexHome over env and default", () => {
+    expect(
+      resolveCodexHome({
+        homeDir: "/home/user",
+        codexHome: "/custom/codex",
+        env: { CODEX_HOME: "/env/codex" },
+      }),
+    ).toBe(path.resolve("/custom/codex"));
+  });
+
+  it("uses CODEX_HOME from env when set", () => {
+    expect(
+      resolveCodexHome({
+        homeDir: "/home/user",
+        env: { CODEX_HOME: "/env/codex" },
+      }),
+    ).toBe(path.resolve("/env/codex"));
+  });
+
+  it("defaults to ~/.codex", () => {
+    expect(resolveCodexHome({ homeDir: "/home/user", env: {} })).toBe(
+      path.join("/home/user", ".codex"),
+    );
   });
 });

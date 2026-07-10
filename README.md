@@ -1,4 +1,4 @@
-# @paulbaranowski/agent-trust
+# agent-trust
 
 Library and CLI for managing Cursor, Claude, and Codex directory trust stores.
 
@@ -9,13 +9,13 @@ Zero runtime dependencies. Requires Node `>=24`. MIT licensed.
 ## Install
 
 ```bash
-npm i -g @paulbaranowski/agent-trust
+npm i -g agent-trust
 ```
 
 Or add it as a library dependency:
 
 ```bash
-npm i @paulbaranowski/agent-trust
+npm i agent-trust
 ```
 
 ## Library
@@ -24,13 +24,15 @@ npm i @paulbaranowski/agent-trust
 I/O — it returns an `AgentTrustDirResult` discriminated union.
 
 ```ts
-import { agentTrustDir } from "@paulbaranowski/agent-trust";
+import { agentTrustDir } from "agent-trust";
 
 const result = agentTrustDir({
   agent: "cursor", // "cursor" | "cursor-agent" | "claude" | "codex"
   dirPath: process.cwd(),
   // trustMethod defaults to "agent-trust"; Cursor markers record it.
   trustMethod: "groundcrew-auto-trust",
+  // Optional: override Codex config dir (else CODEX_HOME, else ~/.codex).
+  // codexHome: "/custom/codex",
 });
 
 if (!result.ok) {
@@ -48,6 +50,9 @@ if (!result.ok) {
 
 Full reference for every export (mutations, helpers, formatters, and types):
 **[Library API](docs/library-api.md)**.
+
+How each agent records trust on disk (Cursor markers, Claude `~/.claude.json`,
+Codex `config.toml`): **[Agent trust-dir markings](docs/agent-trust-stores.md)**.
 
 ## CLI
 
@@ -108,6 +113,24 @@ Removes trust entries whose directory path no longer exists on disk. Same as
 agent-trust prune
 agent-trust prune --agent codex
 ```
+
+## Path semantics and concurrency
+
+- **Canonicalization:** Workspace paths are `realpath`'d when they exist (so
+  symlink aliases and `/tmp` vs `/private/tmp` share one trust key). Missing
+  paths fall back to `path.resolve`.
+- **Cursor slug:** Project directory names under `~/.cursor/projects/` strip
+  leading separators and replace unsafe characters (`\ / : * ? " < > |`) with
+  `-` (Orca-compatible).
+- **Codex:** Config lives under `CODEX_HOME` when set (or an explicit
+  `codexHome` library option), otherwise `~/.codex`. Project table headers use
+  `JSON.stringify` for escaping.
+- **Claude:** Corrupt or non-object `~/.claude.json` (or an invalid `projects`
+  field) returns an error result and is **not** overwritten.
+- **Concurrency:** Shared JSON/TOML stores use read-merge-write. Concurrent
+  `agentTrustDir()` calls from multiple processes can race. Cross-process
+  locking (emdash in-process lock / whip `flock`) is out of scope for this
+  release.
 
 ## License
 

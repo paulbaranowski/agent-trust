@@ -2,25 +2,22 @@ import { existsSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import path from "node:path";
 
 import type { AgentTrustedDir, AgentTrustDirResult } from "../types.ts";
-import { isPlainObject, writeFileAtomic } from "./shared.ts";
+import { canonicalizeWorkspacePath, isPlainObject, writeFileAtomic } from "./shared.ts";
 
 interface CursorWorkspaceTrustedMarker {
   workspacePath?: string;
   trustMethod?: string;
 }
 
-/** Normalize a resolved absolute path into Cursor's project slug. */
+/** Normalize a resolved absolute path into Cursor's project slug (Orca-compatible). */
 export function cursorProjectSlugFromResolved(resolvedPath: string): string {
-  return resolvedPath
-    .replaceAll("\\", "/")
-    .replace(/^[A-Za-z]:/, "")
-    .replace(/^\//, "")
-    .replaceAll("/", "-");
+  const stripped = resolvedPath.replace(/^[\\/]+/, "");
+  return stripped.replace(/[\\/:*?"<>|]+/g, "-");
 }
 
 /** Cursor keys project metadata under `~/.cursor/projects/<slug>/`. */
 export function cursorProjectSlug(workspacePath: string): string {
-  return cursorProjectSlugFromResolved(path.resolve(workspacePath));
+  return cursorProjectSlugFromResolved(canonicalizeWorkspacePath(workspacePath));
 }
 
 function cursorProjectsDir(homeDir: string): string {
@@ -37,7 +34,7 @@ export function ensureCursorTrust(input: {
   homeDir: string;
   trustMethod: string;
 }): AgentTrustDirResult {
-  const absoluteWorkspacePath = path.resolve(input.workspacePath);
+  const absoluteWorkspacePath = canonicalizeWorkspacePath(input.workspacePath);
   const markerPath = cursorWorkspaceTrustedPath(input.homeDir, input.workspacePath);
   if (existsSync(markerPath)) {
     let existing: CursorWorkspaceTrustedMarker | undefined;
@@ -49,7 +46,7 @@ export function ensureCursorTrust(input: {
     const recordedPath = existing?.workspacePath;
     if (
       recordedPath === undefined ||
-      path.resolve(recordedPath) === absoluteWorkspacePath
+      canonicalizeWorkspacePath(recordedPath) === absoluteWorkspacePath
     ) {
       return {
         ok: true,
@@ -137,7 +134,7 @@ export function listCursorTrustEntries(homeDir: string): AgentTrustedDir[] {
     }
     entries.push({
       agent: "cursor",
-      dirPath: path.resolve(dirPath),
+      dirPath: canonicalizeWorkspacePath(dirPath),
       detail,
       store: markerPath,
     });

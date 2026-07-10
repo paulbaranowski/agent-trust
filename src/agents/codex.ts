@@ -2,26 +2,76 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 
 import type { AgentTrustedDir, AgentTrustDirResult } from "../types.ts";
-import { writeFileAtomic } from "./shared.ts";
+import {
+  canonicalizeWorkspacePath,
+  resolveCodexHome,
+  writeFileAtomic,
+} from "./shared.ts";
+
+export { resolveCodexHome } from "./shared.ts";
 
 const CODEX_TRUST_LEVEL = "trusted";
-const CODEX_PROJECT_HEADER_PATTERN = /\[projects\."((?:[^"\\]|\\.)*)"\]/g;
+/** Match `[projects.<json-string>]` headers written via JSON.stringify. */
+const CODEX_PROJECT_HEADER_PATTERN = /\[projects\.("(?:[^"\\]|\\.)*")\]/g;
 
-function escapeTomlDoubleQuotedString(value: string): string {
-  return value.replaceAll("\\", "\\\\").replaceAll('"', '\\"');
-}
-
-function unescapeTomlDoubleQuotedString(value: string): string {
-  return value.replaceAll("\\\\", "\\").replaceAll('\\"', '"');
-}
-
-/** Codex keys per-workspace trust under `[projects."<abs-path>"]` in `config.toml`. */
+/** Codex keys per-workspace trust under `[projects.<json-path>]` in `config.toml`. */
 export function codexProjectTableHeader(absoluteWorkspacePath: string): string {
-  return `[projects."${escapeTomlDoubleQuotedString(absoluteWorkspacePath)}"]`;
+  return `[projects.${JSON.stringify(absoluteWorkspacePath)}]`;
 }
 
-function codexConfigPath(homeDir: string): string {
-  return path.join(homeDir, ".codex", "config.toml");
+/** Pre-0.2.0 header shape: TOML-escaped double-quoted path (kept for read/delete compat). */
+function legacyCodexProjectTableHeader(absoluteWorkspacePath: string): string {
+  const escaped = absoluteWorkspacePath.replaceAll("\\", "\\\\").replaceAll('"', '\\"');
+  return `[projects."${escaped}"]`;
+}
+
+/** Modern + legacy headers that may identify the same workspace on disk. */
+function codexHeadersForWorkspace(absoluteWorkspacePath: string): string[] {
+  return [
+    codexProjectTableHeader(absoluteWorkspacePath),
+    legacyCodexProjectTableHeader(absoluteWorkspacePath),
+  ];
+}
+
+function findCodexHeaderIndex(
+  config: string,
+  absoluteWorkspacePath: string,
+): { header: string; headerIndex: number } | undefined {
+  for (const header of codexHeadersForWorkspace(absoluteWorkspacePath)) {
+    const headerIndex = config.indexOf(header);
+    if (headerIndex !== -1) {
+      return { header, headerIndex };
+    }
+  }
+  // Alias match: symlink / pre-realpath keys that canonicalize to the same path.
+  for (const match of config.matchAll(CODEX_PROJECT_HEADER_PATTERN)) {
+    const rawPath = match[1];
+    const headerIndex = match.index;
+    if (rawPath === undefined || headerIndex === undefined) {
+      continue;
+    }
+    const parsedPath = parseCodexProjectPathKey(rawPath);
+    if (canonicalizeWorkspacePath(parsedPath) === absoluteWorkspacePath) {
+      return { header: match[0], headerIndex };
+    }
+  }
+  return undefined;
+}
+
+function parseCodexProjectPathKey(jsonQuotedPath: string): string {
+  try {
+    const parsed: unknown = JSON.parse(jsonQuotedPath);
+    if (typeof parsed === "string") {
+      return parsed;
+    }
+  } catch {
+    // fall through to raw strip for legacy headers
+  }
+  return jsonQuotedPath.slice(1, -1).replaceAll("\\\\", "\\").replaceAll('\\"', '"');
+}
+
+function codexConfigPath(homeDir: string, codexHome?: string, env?: NodeJS.ProcessEnv): string {
+  return path.join(resolveCodexHome({ homeDir, codexHome, env }), "config.toml");
 }
 
 function codexProjectSectionBody(config: string, headerIndex: number, headerLength: number): string {
@@ -31,12 +81,11 @@ function codexProjectSectionBody(config: string, headerIndex: number, headerLeng
 }
 
 function hasCodexWorkspaceTrust(config: string, absoluteWorkspacePath: string): boolean {
-  const header = codexProjectTableHeader(absoluteWorkspacePath);
-  const headerIndex = config.indexOf(header);
-  if (headerIndex === -1) {
+  const found = findCodexHeaderIndex(config, absoluteWorkspacePath);
+  if (found === undefined) {
     return false;
   }
-  const sectionBody = codexProjectSectionBody(config, headerIndex, header.length);
+  const sectionBody = codexProjectSectionBody(config, found.headerIndex, found.header.length);
   return /trust_level\s*=\s*"trusted"/.test(sectionBody);
 }
 
@@ -45,13 +94,14 @@ function upsertCodexWorkspaceTrust(config: string, absoluteWorkspacePath: string
     return config;
   }
 
-  const header = codexProjectTableHeader(absoluteWorkspacePath);
-  const headerIndex = config.indexOf(header);
-  if (headerIndex === -1) {
+  const found = findCodexHeaderIndex(config, absoluteWorkspacePath);
+  if (found === undefined) {
+    const header = codexProjectTableHeader(absoluteWorkspacePath);
     const separator = config.length === 0 ? "" : config.endsWith("\n") ? "" : "\n";
     return `${config}${separator}${header}\ntrust_level = "${CODEX_TRUST_LEVEL}"\n`;
   }
 
+  const { header, headerIndex } = found;
   const sectionBody = codexProjectSectionBody(config, headerIndex, header.length);
   const sectionEnd = headerIndex + header.length + sectionBody.length;
   if (/trust_level\s*=/.test(sectionBody)) {
@@ -93,9 +143,11 @@ export function ensureCodexTrust(input: {
   workspacePath: string;
   homeDir: string;
   trustMethod: string;
+  codexHome?: string;
+  env?: NodeJS.ProcessEnv;
 }): AgentTrustDirResult {
-  const absoluteWorkspacePath = path.resolve(input.workspacePath);
-  const codexConfig = codexConfigPath(input.homeDir);
+  const absoluteWorkspacePath = canonicalizeWorkspacePath(input.workspacePath);
+  const codexConfig = codexConfigPath(input.homeDir, input.codexHome, input.env);
   let existing: string;
   try {
     existing = readCodexConfig(codexConfig);
@@ -147,7 +199,7 @@ export function listCodexTrustedProjects(
     if (rawPath === undefined) {
       continue;
     }
-    const workspacePath = path.resolve(unescapeTomlDoubleQuotedString(rawPath));
+    const workspacePath = canonicalizeWorkspacePath(parseCodexProjectPathKey(rawPath));
     const header = match[0];
     const headerIndex = match.index;
     if (headerIndex === undefined) {
@@ -163,8 +215,11 @@ export function listCodexTrustedProjects(
   return entries.toSorted((a, b) => a.path.localeCompare(b.path));
 }
 
-export function listCodexTrustEntries(homeDir: string): AgentTrustedDir[] {
-  const codexConfig = codexConfigPath(homeDir);
+export function listCodexTrustEntries(
+  homeDir: string,
+  options: { codexHome?: string; env?: NodeJS.ProcessEnv } = {},
+): AgentTrustedDir[] {
+  const codexConfig = codexConfigPath(homeDir, options.codexHome, options.env);
   let config: string;
   try {
     config = readCodexConfig(codexConfig);
@@ -181,12 +236,12 @@ export function listCodexTrustEntries(homeDir: string): AgentTrustedDir[] {
 }
 
 export function removeCodexProjectTrust(config: string, absoluteWorkspacePath: string): string {
-  const header = codexProjectTableHeader(absoluteWorkspacePath);
-  const headerIndex = config.indexOf(header);
-  if (headerIndex === -1) {
+  const found = findCodexHeaderIndex(config, absoluteWorkspacePath);
+  if (found === undefined) {
     return config;
   }
 
+  const { header, headerIndex } = found;
   const sectionBody = codexProjectSectionBody(config, headerIndex, header.length);
   const sectionEnd = headerIndex + header.length + sectionBody.length;
   const withoutTrust = sectionBody.replace(/^\s*trust_level\s*=\s*"[^"]*"\s*\n?/m, "");
@@ -204,10 +259,14 @@ export function removeCodexProjectTrust(config: string, absoluteWorkspacePath: s
   return `${config.slice(0, headerIndex + header.length)}${withoutTrust}${config.slice(sectionEnd)}`;
 }
 
-export function deleteCodexTrustEntry(homeDir: string, workspacePath: string): boolean {
-  const codexConfig = codexConfigPath(homeDir);
+export function deleteCodexTrustEntry(
+  homeDir: string,
+  workspacePath: string,
+  options: { codexHome?: string; env?: NodeJS.ProcessEnv } = {},
+): boolean {
+  const codexConfig = codexConfigPath(homeDir, options.codexHome, options.env);
   const existing = readCodexConfig(codexConfig);
-  const updated = removeCodexProjectTrust(existing, workspacePath);
+  const updated = removeCodexProjectTrust(existing, canonicalizeWorkspacePath(workspacePath));
   if (updated !== existing) {
     writeFileAtomic(codexConfig, updated);
   }
