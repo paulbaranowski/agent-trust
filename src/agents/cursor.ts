@@ -1,8 +1,8 @@
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import path from "node:path";
 
 import type { AgentTrustEntry, TrustResult } from "../types.ts";
-import { isPlainObject } from "./shared.ts";
+import { isPlainObject, writeFileAtomic } from "./shared.ts";
 
 interface CursorWorkspaceTrustedMarker {
   workspacePath?: string;
@@ -46,8 +46,7 @@ export function ensureCursorTrust(input: {
   };
 
   try {
-    mkdirSync(path.dirname(markerPath), { recursive: true });
-    writeFileSync(markerPath, `${JSON.stringify(marker, undefined, 2)}\n`, "utf8");
+    writeFileAtomic(markerPath, `${JSON.stringify(marker, undefined, 2)}\n`);
   } catch (error) {
     return {
       ok: false,

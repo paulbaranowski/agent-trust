@@ -161,7 +161,8 @@ function runAdd(parsed: ParsedArguments): void {
   }
 }
 
-function main(argv: readonly string[]): void {
+/** CLI entry used by the bin wrapper and unit tests. */
+export function main(argv: readonly string[]): void {
   const parsed = parseArguments(argv);
 
   if (parsed.command === "list") {
@@ -193,6 +194,12 @@ function main(argv: readonly string[]): void {
     return;
   }
 
+  const hasTarget =
+    parsed.all === true || parsed.path !== undefined || parsed.pathPrefix !== undefined;
+  if (!hasTarget) {
+    throw new Error("remove requires --all, --path, or --prefix");
+  }
+
   const { results } = untrust({
     homeDir: parsed.homeDir,
     all: parsed.all,
@@ -204,10 +211,18 @@ function main(argv: readonly string[]): void {
   console.log(formatTrustActionResults(results, { homeDir: parsed.homeDir, action: "remove" }));
 }
 
-try {
-  main(process.argv.slice(2));
-} catch (error) {
-  const message = error instanceof Error ? error.message : String(error);
-  process.stderr.write(`${message}\n`);
-  process.exitCode = 1;
+const isDirectRun =
+  process.argv[1] !== undefined &&
+  (process.argv[1].endsWith("/cli.js") ||
+    process.argv[1].endsWith("/cli.ts") ||
+    process.argv[1].endsWith("agent-trust.js"));
+
+if (isDirectRun) {
+  try {
+    main(process.argv.slice(2));
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    process.stderr.write(`${message}\n`);
+    process.exitCode = 1;
+  }
 }
