@@ -196,6 +196,37 @@ describe(ensureClaudeTrust, () => {
     expect(keys).toEqual([path.resolve(workspacePath)]);
   });
 
+  it("clears both native and slash-normalized Windows keys on delete", () => {
+    const nativeKey = String.raw`C:\Users\a\proj`;
+    const slashKey = "C:/Users/a/proj";
+    writeFileSync(
+      path.join(fakeHome, ".claude.json"),
+      JSON.stringify({
+        projects: {
+          [nativeKey]: {
+            hasTrustDialogAccepted: true,
+            hasCompletedProjectOnboarding: true,
+          },
+          [slashKey]: {
+            hasTrustDialogAccepted: true,
+            hasCompletedProjectOnboarding: true,
+          },
+          "/unrelated/posix": { hasTrustDialogAccepted: true, keep: true },
+        },
+      }),
+      "utf8",
+    );
+
+    expect(deleteClaudeTrustEntry(fakeHome, nativeKey)).toBe(true);
+    const projects = readClaudeJson()["projects"] as Record<string, Record<string, unknown>>;
+    expect(projects[nativeKey]).toBeUndefined();
+    expect(projects[slashKey]).toBeUndefined();
+    expect(projects["/unrelated/posix"]).toEqual({
+      hasTrustDialogAccepted: true,
+      keep: true,
+    });
+  });
+
   it("returns an error result when the file cannot be written", () => {
     if (typeof process.getuid === "function" && process.getuid() === 0) {
       return;

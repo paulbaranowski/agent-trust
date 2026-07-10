@@ -138,12 +138,16 @@ is removed entirely. Other project metadata is left intact.
 
 ## Codex
 
-**Store:** `~/.codex/config.toml` → `[projects."<absPath>"]`
+**Store:** `$CODEX_HOME/config.toml` (or `~/.codex/config.toml`) →
+`[projects.<json-path>]`
+
+Optional library `codexHome` overrides `CODEX_HOME` / the default.
 
 ### Project section
 
 Codex records per-workspace trust as a TOML table whose header embeds the
-absolute path (with `\` and `"` escaped for double-quoted strings):
+absolute path via `JSON.stringify` (Windows-looking paths normalize `\` → `/`
+first so TOML does not treat `\U` as a unicode escape):
 
 ```toml
 [projects."/Users/dev/repo/worktree"]

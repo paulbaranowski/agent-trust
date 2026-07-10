@@ -1,5 +1,5 @@
 {
-  "name": "@paulbaranowski/agent-trust",
+  "name": "agent-trust",
   "version": "0.2.0",
   "description": "Library and CLI for Cursor, Claude, and Codex workspace trust stores",
   "license": "MIT",
@@ -26,9 +26,6 @@
     "bin",
     "dist"
   ],
-  "publishConfig": {
-    "access": "public"
-  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/paulbaranowski/agent-trust.git"

@@ -9,7 +9,7 @@ import {
   listAgentTrustedDirs,
   pruneAgentTrustedDirs,
   // …
-} from "@paulbaranowski/agent-trust";
+} from "agent-trust";
 ```
 
 All store I/O for `agentTrustDir` returns an `AgentTrustDirResult` instead of throwing.
@@ -30,6 +30,7 @@ agentTrustDir({
   dirPath: "/path/to/dir",
   // homeDir: "/home/me", // defaults to os.homedir()
   // trustMethod: "agent-trust", // default; Cursor only persists this
+  // codexHome: "/custom/codex", // optional; else CODEX_HOME, else ~/.codex
 });
 ```
 
@@ -41,7 +42,8 @@ agentTrustDir({
 | `{ ok: false, status: "error", error, agent?, dirPath? }`                    | I/O or home resolution failed  |
 
 `cursor-agent` is normalized to `cursor`. Claude and Codex accept `trustMethod` for API
-uniformity but do not store it.
+uniformity but do not store it. `codexHome` (also on list / untrust / prune) overrides
+where Codex `config.toml` is read and written.
 
 ---
 

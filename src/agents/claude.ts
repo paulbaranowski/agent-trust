@@ -2,7 +2,12 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 import type { AgentTrustedDir, AgentTrustDirResult } from "../types.ts";
-import { canonicalizeWorkspacePath, isPlainObject, writeFileAtomic } from "./shared.ts";
+import {
+  canonicalizeWorkspacePath,
+  isPlainObject,
+  looksWindowsPath,
+  writeFileAtomic,
+} from "./shared.ts";
 
 interface ClaudeProjectEntry {
   hasTrustDialogAccepted?: boolean;
@@ -83,10 +88,6 @@ function findClaudeProjectKey(
 }
 
 /** True for drive-letter or UNC paths that Claude may match in either slash form. */
-function looksWindowsPath(workspacePath: string): boolean {
-  return /^[A-Za-z]:[\\/]/.test(workspacePath) || workspacePath.startsWith("\\\\");
-}
-
 function claudeTrustKeysForWorkspace(workspacePath: string): string[] {
   if (looksWindowsPath(workspacePath)) {
     const native = workspacePath;
@@ -189,20 +190,48 @@ export function listClaudeTrustEntries(homeDir: string): AgentTrustedDir[] {
     return [];
   }
   const projects = read.value.projects ?? {};
+  const seen = new Set<string>();
   const entries: AgentTrustedDir[] = [];
   // On-disk Claude stores key projects by absolute path.
   for (const [projectPath, project] of Object.entries(projects)) {
     if (project.hasTrustDialogAccepted !== true) {
       continue;
     }
+    const dirPath = looksWindowsPath(projectPath)
+      ? projectPath.replace(/\\/g, "/")
+      : canonicalizeWorkspacePath(projectPath);
+    if (seen.has(dirPath)) {
+      continue;
+    }
+    seen.add(dirPath);
     entries.push({
       agent: "claude",
-      dirPath: canonicalizeWorkspacePath(projectPath),
+      dirPath,
       detail: "hasTrustDialogAccepted",
       store: `${jsonPath}#projects`,
     });
   }
   return entries.toSorted((a, b) => a.dirPath.localeCompare(b.dirPath));
+}
+
+function clearClaudeProjectTrustFlags(
+  projects: Record<string, ClaudeProjectEntry>,
+  projectKey: string,
+): void {
+  const existing = projects[projectKey];
+  if (existing === undefined) {
+    return;
+  }
+  const {
+    hasTrustDialogAccepted: _trust,
+    hasCompletedProjectOnboarding: _onboarding,
+    ...rest
+  } = existing;
+  if (Object.keys(rest).length === 0) {
+    delete projects[projectKey];
+  } else {
+    projects[projectKey] = rest;
+  }
 }
 
 export function deleteClaudeTrustEntry(homeDir: string, workspacePath: string): boolean {
@@ -212,28 +241,38 @@ export function deleteClaudeTrustEntry(homeDir: string, workspacePath: string): 
     return false;
   }
   const claudeJson = read.value;
-  const projects = claudeJson.projects ?? {};
-  const projectKey = findClaudeProjectKey(projects, workspacePath);
-  if (projectKey === undefined) {
-    return false;
-  }
-  const existing = projects[projectKey];
-  if (existing?.hasTrustDialogAccepted !== true) {
-    return false;
+  const projects = { ...(claudeJson.projects ?? {}) };
+
+  const keysToClear = new Set<string>();
+  if (looksWindowsPath(workspacePath)) {
+    const identity = workspacePath.replace(/\\/g, "/");
+    for (const key of Object.keys(projects)) {
+      if (looksWindowsPath(key) && key.replace(/\\/g, "/") === identity) {
+        keysToClear.add(key);
+      }
+    }
+    for (const key of claudeTrustKeysForWorkspace(workspacePath)) {
+      keysToClear.add(key);
+    }
+  } else {
+    const projectKey = findClaudeProjectKey(projects, workspacePath);
+    if (projectKey !== undefined) {
+      keysToClear.add(projectKey);
+    }
   }
 
-  const {
-    hasTrustDialogAccepted: _trust,
-    hasCompletedProjectOnboarding: _onboarding,
-    ...rest
-  } = existing;
-  if (Object.keys(rest).length === 0) {
-    const { [projectKey]: _removed, ...remainingProjects } = projects;
-    claudeJson.projects = remainingProjects;
-  } else {
-    projects[projectKey] = rest;
-    claudeJson.projects = projects;
+  let deleted = false;
+  for (const projectKey of keysToClear) {
+    if (projects[projectKey]?.hasTrustDialogAccepted !== true) {
+      continue;
+    }
+    clearClaudeProjectTrustFlags(projects, projectKey);
+    deleted = true;
   }
+  if (!deleted) {
+    return false;
+  }
+  claudeJson.projects = projects;
   writeClaudeJsonFile(jsonPath, claudeJson);
   return true;
 }

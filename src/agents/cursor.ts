@@ -2,16 +2,16 @@ import { existsSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import path from "node:path";
 
 import type { AgentTrustedDir, AgentTrustDirResult } from "../types.ts";
-import { canonicalizeWorkspacePath, isPlainObject, writeFileAtomic } from "./shared.ts";
+import {
+  canonicalizeWorkspacePath,
+  isPlainObject,
+  resolveWorkspaceTrustPath,
+  writeFileAtomic,
+} from "./shared.ts";
 
 interface CursorWorkspaceTrustedMarker {
   workspacePath?: string;
   trustMethod?: string;
-}
-
-/** True for drive-letter or UNC paths that must not go through POSIX resolve. */
-function looksWindowsPath(workspacePath: string): boolean {
-  return /^[A-Za-z]:[\\/]/.test(workspacePath) || workspacePath.startsWith("\\\\");
 }
 
 /** Normalize a resolved absolute path into Cursor's project slug (Orca-compatible). */
@@ -22,12 +22,7 @@ export function cursorProjectSlugFromResolved(resolvedPath: string): string {
 
 /** Cursor keys project metadata under `~/.cursor/projects/<slug>/`. */
 export function cursorProjectSlug(workspacePath: string): string {
-  // Windows-looking strings are slugified as-is so unit tests and cross-OS
-  // callers are not mangled by POSIX path.resolve.
-  const abs = looksWindowsPath(workspacePath)
-    ? workspacePath
-    : canonicalizeWorkspacePath(workspacePath);
-  return cursorProjectSlugFromResolved(abs);
+  return cursorProjectSlugFromResolved(resolveWorkspaceTrustPath(workspacePath));
 }
 
 function cursorProjectsDir(homeDir: string): string {
@@ -44,7 +39,7 @@ export function ensureCursorTrust(input: {
   homeDir: string;
   trustMethod: string;
 }): AgentTrustDirResult {
-  const absoluteWorkspacePath = canonicalizeWorkspacePath(input.workspacePath);
+  const absoluteWorkspacePath = resolveWorkspaceTrustPath(input.workspacePath);
   const markerPath = cursorWorkspaceTrustedPath(input.homeDir, input.workspacePath);
   if (existsSync(markerPath)) {
     let existing: CursorWorkspaceTrustedMarker | undefined;

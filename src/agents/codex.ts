@@ -5,6 +5,7 @@ import type { AgentTrustedDir, AgentTrustDirResult } from "../types.ts";
 import {
   canonicalizeWorkspacePath,
   resolveCodexHome,
+  resolveWorkspaceTrustPath,
   writeFileAtomic,
 } from "./shared.ts";
 
@@ -30,6 +31,43 @@ export function codexProjectTableHeader(absoluteWorkspacePath: string): string {
   return `[projects.${JSON.stringify(normalizeCodexProjectPath(absoluteWorkspacePath))}]`;
 }
 
+/** Pre-0.2.0 header shape: TOML-escaped double-quoted path (kept for read/delete compat). */
+function legacyCodexProjectTableHeader(absoluteWorkspacePath: string): string {
+  const escaped = absoluteWorkspacePath.replaceAll("\\", "\\\\").replaceAll('"', '\\"');
+  return `[projects."${escaped}"]`;
+}
+
+/** Modern + legacy headers that may identify the same workspace on disk. */
+function codexHeadersForWorkspace(absoluteWorkspacePath: string): string[] {
+  const headers = new Set<string>([codexProjectTableHeader(absoluteWorkspacePath)]);
+  headers.add(legacyCodexProjectTableHeader(absoluteWorkspacePath));
+  const normalized = normalizeCodexProjectPath(absoluteWorkspacePath);
+  if (normalized !== absoluteWorkspacePath) {
+    headers.add(legacyCodexProjectTableHeader(normalized));
+  }
+  // Legacy Windows writers stored backslash form before slash normalization.
+  if (normalized.includes("/")) {
+    const withBackslashes = normalized.replace(/\//g, "\\");
+    if (/^[A-Za-z]:\\/.test(withBackslashes) || withBackslashes.startsWith("\\\\")) {
+      headers.add(legacyCodexProjectTableHeader(withBackslashes));
+    }
+  }
+  return [...headers];
+}
+
+function findCodexHeaderIndex(
+  config: string,
+  absoluteWorkspacePath: string,
+): { header: string; headerIndex: number } | undefined {
+  for (const header of codexHeadersForWorkspace(absoluteWorkspacePath)) {
+    const headerIndex = config.indexOf(header);
+    if (headerIndex !== -1) {
+      return { header, headerIndex };
+    }
+  }
+  return undefined;
+}
+
 function parseCodexProjectPathKey(jsonQuotedPath: string): string {
   try {
     const parsed: unknown = JSON.parse(jsonQuotedPath);
@@ -53,12 +91,11 @@ function codexProjectSectionBody(config: string, headerIndex: number, headerLeng
 }
 
 function hasCodexWorkspaceTrust(config: string, absoluteWorkspacePath: string): boolean {
-  const header = codexProjectTableHeader(absoluteWorkspacePath);
-  const headerIndex = config.indexOf(header);
-  if (headerIndex === -1) {
+  const found = findCodexHeaderIndex(config, absoluteWorkspacePath);
+  if (found === undefined) {
     return false;
   }
-  const sectionBody = codexProjectSectionBody(config, headerIndex, header.length);
+  const sectionBody = codexProjectSectionBody(config, found.headerIndex, found.header.length);
   return /trust_level\s*=\s*"trusted"/.test(sectionBody);
 }
 
@@ -67,13 +104,14 @@ function upsertCodexWorkspaceTrust(config: string, absoluteWorkspacePath: string
     return config;
   }
 
-  const header = codexProjectTableHeader(absoluteWorkspacePath);
-  const headerIndex = config.indexOf(header);
-  if (headerIndex === -1) {
+  const found = findCodexHeaderIndex(config, absoluteWorkspacePath);
+  if (found === undefined) {
+    const header = codexProjectTableHeader(absoluteWorkspacePath);
     const separator = config.length === 0 ? "" : config.endsWith("\n") ? "" : "\n";
     return `${config}${separator}${header}\ntrust_level = "${CODEX_TRUST_LEVEL}"\n`;
   }
 
+  const { header, headerIndex } = found;
   const sectionBody = codexProjectSectionBody(config, headerIndex, header.length);
   const sectionEnd = headerIndex + header.length + sectionBody.length;
   if (/trust_level\s*=/.test(sectionBody)) {
@@ -118,7 +156,7 @@ export function ensureCodexTrust(input: {
   codexHome?: string;
   env?: NodeJS.ProcessEnv;
 }): AgentTrustDirResult {
-  const absoluteWorkspacePath = canonicalizeWorkspacePath(input.workspacePath);
+  const absoluteWorkspacePath = resolveWorkspaceTrustPath(input.workspacePath);
   const codexConfig = codexConfigPath(input.homeDir, input.codexHome, input.env);
   let existing: string;
   try {
@@ -171,7 +209,10 @@ export function listCodexTrustedProjects(
     if (rawPath === undefined) {
       continue;
     }
-    const workspacePath = canonicalizeWorkspacePath(parseCodexProjectPathKey(rawPath));
+    const parsedPath = parseCodexProjectPathKey(rawPath);
+    const workspacePath = /^[A-Za-z]:[\\/]/.test(parsedPath) || parsedPath.startsWith("\\\\")
+      ? parsedPath.replace(/\\/g, "/")
+      : canonicalizeWorkspacePath(parsedPath);
     const header = match[0];
     const headerIndex = match.index;
     if (headerIndex === undefined) {
@@ -208,12 +249,12 @@ export function listCodexTrustEntries(
 }
 
 export function removeCodexProjectTrust(config: string, absoluteWorkspacePath: string): string {
-  const header = codexProjectTableHeader(absoluteWorkspacePath);
-  const headerIndex = config.indexOf(header);
-  if (headerIndex === -1) {
+  const found = findCodexHeaderIndex(config, absoluteWorkspacePath);
+  if (found === undefined) {
     return config;
   }
 
+  const { header, headerIndex } = found;
   const sectionBody = codexProjectSectionBody(config, headerIndex, header.length);
   const sectionEnd = headerIndex + header.length + sectionBody.length;
   const withoutTrust = sectionBody.replace(/^\s*trust_level\s*=\s*"[^"]*"\s*\n?/m, "");
@@ -240,7 +281,7 @@ export function deleteCodexTrustEntry(
   const existing = readCodexConfig(codexConfig);
   const updated = removeCodexProjectTrust(
     existing,
-    canonicalizeWorkspacePath(workspacePath),
+    resolveWorkspaceTrustPath(workspacePath),
   );
   if (updated !== existing) {
     writeFileAtomic(codexConfig, updated);

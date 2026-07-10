@@ -1,4 +1,4 @@
-# @paulbaranowski/agent-trust
+# agent-trust
 
 Library and CLI for managing Cursor, Claude, and Codex directory trust stores.
 
@@ -9,13 +9,13 @@ Zero runtime dependencies. Requires Node `>=24`. MIT licensed.
 ## Install
 
 ```bash
-npm i -g @paulbaranowski/agent-trust
+npm i -g agent-trust
 ```
 
 Or add it as a library dependency:
 
 ```bash
-npm i @paulbaranowski/agent-trust
+npm i agent-trust
 ```
 
 ## Library
@@ -24,7 +24,7 @@ npm i @paulbaranowski/agent-trust
 I/O — it returns an `AgentTrustDirResult` discriminated union.
 
 ```ts
-import { agentTrustDir } from "@paulbaranowski/agent-trust";
+import { agentTrustDir } from "agent-trust";
 
 const result = agentTrustDir({
   agent: "cursor", // "cursor" | "cursor-agent" | "claude" | "codex"

@@ -33,6 +33,47 @@ describe(codexProjectTableHeader, () => {
   });
 });
 
+describe("legacy Codex Windows headers", () => {
+  it("treats a pre-0.2.0 escaped-backslash header as already trusted", () => {
+    const fakeHome = mkdtempSync(path.join(os.tmpdir(), "agent-trust-codex-legacy-"));
+    const workspacePath = String.raw`C:\Users\a\b`;
+    const legacyHeader = `[projects."C:\\\\Users\\\\a\\\\b"]`;
+    mkdirSync(path.join(fakeHome, ".codex"), { recursive: true });
+    writeFileSync(
+      path.join(fakeHome, ".codex", "config.toml"),
+      `${legacyHeader}\ntrust_level = "trusted"\n`,
+      "utf8",
+    );
+
+    const result = ensureCodexTrust({
+      workspacePath,
+      homeDir: fakeHome,
+      trustMethod: "agent-trust",
+    });
+    expect(result.status).toBe("already-trusted");
+    expect(readFileSync(path.join(fakeHome, ".codex", "config.toml"), "utf8")).toBe(
+      `${legacyHeader}\ntrust_level = "trusted"\n`,
+    );
+    rmSync(fakeHome, { recursive: true, force: true });
+  });
+
+  it("removes a pre-0.2.0 escaped-backslash header on delete", () => {
+    const fakeHome = mkdtempSync(path.join(os.tmpdir(), "agent-trust-codex-legacy-del-"));
+    const workspacePath = String.raw`C:\Users\a\b`;
+    const legacyHeader = `[projects."C:\\\\Users\\\\a\\\\b"]`;
+    mkdirSync(path.join(fakeHome, ".codex"), { recursive: true });
+    writeFileSync(
+      path.join(fakeHome, ".codex", "config.toml"),
+      `${legacyHeader}\ntrust_level = "trusted"\n`,
+      "utf8",
+    );
+
+    expect(deleteCodexTrustEntry(fakeHome, workspacePath)).toBe(true);
+    expect(readFileSync(path.join(fakeHome, ".codex", "config.toml"), "utf8").trim()).toBe("");
+    rmSync(fakeHome, { recursive: true, force: true });
+  });
+});
+
 describe(ensureCodexTrust, () => {
   let fakeHome: string;
   beforeEach(() => {
