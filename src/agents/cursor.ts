@@ -40,12 +40,25 @@ export function ensureCursorTrust(input: {
   const absoluteWorkspacePath = path.resolve(input.workspacePath);
   const markerPath = cursorWorkspaceTrustedPath(input.homeDir, input.workspacePath);
   if (existsSync(markerPath)) {
-    return {
-      ok: true,
-      status: "already-trusted",
-      agent: "cursor",
-      dirPath: absoluteWorkspacePath,
-    };
+    let existing: CursorWorkspaceTrustedMarker | undefined;
+    try {
+      existing = parseCursorMarker(readFileSync(markerPath, "utf8"));
+    } catch {
+      existing = undefined;
+    }
+    const recordedPath = existing?.workspacePath;
+    if (
+      recordedPath === undefined ||
+      path.resolve(recordedPath) === absoluteWorkspacePath
+    ) {
+      return {
+        ok: true,
+        status: "already-trusted",
+        agent: "cursor",
+        dirPath: absoluteWorkspacePath,
+      };
+    }
+    // Same Cursor slug, different recorded path — rewrite the marker for this path.
   }
 
   const marker = {

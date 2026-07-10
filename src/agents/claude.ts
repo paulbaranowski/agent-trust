@@ -41,6 +41,22 @@ function writeClaudeJsonFile(jsonPath: string, contents: ClaudeJsonFile): void {
   writeFileAtomic(jsonPath, `${JSON.stringify(contents, undefined, 2)}\n`);
 }
 
+function findClaudeProjectKey(
+  projects: Record<string, ClaudeProjectEntry>,
+  workspacePath: string,
+): string | undefined {
+  const resolved = path.resolve(workspacePath);
+  if (Object.hasOwn(projects, workspacePath)) {
+    return workspacePath;
+  }
+  for (const key of Object.keys(projects)) {
+    if (path.resolve(key) === resolved) {
+      return key;
+    }
+  }
+  return undefined;
+}
+
 export function ensureClaudeTrust(input: {
   workspacePath: string;
   homeDir: string;
@@ -50,7 +66,8 @@ export function ensureClaudeTrust(input: {
   const jsonPath = claudeJsonPath(input.homeDir);
   const claudeJson = readClaudeJsonFile(jsonPath);
   const projects = claudeJson.projects ?? {};
-  const existing = projects[absoluteWorkspacePath];
+  const projectKey = findClaudeProjectKey(projects, absoluteWorkspacePath);
+  const existing = projectKey === undefined ? undefined : projects[projectKey];
 
   if (existing?.hasTrustDialogAccepted === true) {
     return {
@@ -61,7 +78,8 @@ export function ensureClaudeTrust(input: {
     };
   }
 
-  projects[absoluteWorkspacePath] = {
+  const keyToWrite = projectKey ?? absoluteWorkspacePath;
+  projects[keyToWrite] = {
     ...existing,
     hasTrustDialogAccepted: true,
     hasCompletedProjectOnboarding: true,
@@ -106,22 +124,6 @@ export function listClaudeTrustEntries(homeDir: string): AgentTrustedDir[] {
     });
   }
   return entries.toSorted((a, b) => a.dirPath.localeCompare(b.dirPath));
-}
-
-function findClaudeProjectKey(
-  projects: Record<string, ClaudeProjectEntry>,
-  workspacePath: string,
-): string | undefined {
-  const resolved = path.resolve(workspacePath);
-  if (Object.hasOwn(projects, workspacePath)) {
-    return workspacePath;
-  }
-  for (const key of Object.keys(projects)) {
-    if (path.resolve(key) === resolved) {
-      return key;
-    }
-  }
-  return undefined;
 }
 
 export function deleteClaudeTrustEntry(homeDir: string, workspacePath: string): boolean {

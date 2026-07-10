@@ -61,6 +61,34 @@ describe(ensureClaudeTrust, () => {
     });
   });
 
+  it("treats an alias JSON key as already trusted without duplicating", () => {
+    const canonical = path.resolve(fakeHome, "alias-ws");
+    const aliasKey = `${canonical}${path.sep}`;
+    writeFileSync(
+      path.join(fakeHome, ".claude.json"),
+      JSON.stringify({
+        projects: {
+          [aliasKey]: { hasTrustDialogAccepted: true, note: "keep" },
+        },
+      }),
+      "utf8",
+    );
+
+    const result = ensureClaudeTrust({
+      workspacePath: canonical,
+      homeDir: fakeHome,
+      trustMethod: "agent-trust",
+    });
+
+    expect(result.status).toBe("already-trusted");
+    const projects = readClaudeJson()["projects"] as Record<string, Record<string, unknown>>;
+    expect(Object.keys(projects)).toEqual([aliasKey]);
+    expect(projects[aliasKey]).toEqual({
+      hasTrustDialogAccepted: true,
+      note: "keep",
+    });
+  });
+
   it("recovers from malformed claude.json", () => {
     const workspacePath = path.join(fakeHome, "claude-recover");
     writeFileSync(path.join(fakeHome, ".claude.json"), "not-json", "utf8");

@@ -88,6 +88,42 @@ describe(ensureCursorTrust, () => {
     expect(readFileSync(markerPath, "utf8")).toBe('{"trustMethod":"existing"}\n');
   });
 
+  it("rewrites a slug-colliding marker when the recorded path differs", () => {
+    const firstPath = path.join(fakeHome, "a", "b");
+    const secondPath = path.join(fakeHome, "a-b");
+    expect(cursorProjectSlug(firstPath)).toBe(cursorProjectSlug(secondPath));
+
+    const markerPath = path.join(
+      fakeHome,
+      ".cursor",
+      "projects",
+      cursorProjectSlug(firstPath),
+      ".workspace-trusted",
+    );
+    mkdirSync(path.dirname(markerPath), { recursive: true });
+    writeFileSync(
+      markerPath,
+      `${JSON.stringify({
+        workspacePath: path.resolve(firstPath),
+        trustMethod: "first",
+      })}\n`,
+      "utf8",
+    );
+
+    const result = ensureCursorTrust({
+      workspacePath: secondPath,
+      homeDir: fakeHome,
+      trustMethod: "second",
+    });
+    expect(result).toMatchObject({ ok: true, status: "trusted", agent: "cursor" });
+    const marker = JSON.parse(readFileSync(markerPath, "utf8")) as {
+      workspacePath: string;
+      trustMethod: string;
+    };
+    expect(marker.workspacePath).toBe(path.resolve(secondPath));
+    expect(marker.trustMethod).toBe("second");
+  });
+
   it("returns an error result when the marker cannot be written", () => {
     if (typeof process.getuid === "function" && process.getuid() === 0) {
       return;
