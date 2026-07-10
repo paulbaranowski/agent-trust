@@ -10,12 +10,13 @@ import {
   shortenDirPath,
 } from "./format.ts";
 import { listAgentTrustedDirs } from "./listAgentTrustedDirs.ts";
+import { normalizeAgent } from "./normalize.ts";
 import { pruneAgentTrustedDirs } from "./pruneAgentTrustedDirs.ts";
 import type { AgentTrustAgent } from "./types.ts";
 
 const USAGE = `Usage:
   agent-trust list [--agent cursor|claude|codex] [--missing] [--home <dir>]
-  agent-trust add --agent <agent> [--dir <abs>] [--home <dir>] [--trust-method <value>]
+  agent-trust add --agent <cursor|cursor-agent|claude|codex> [--dir <abs>] [--home <dir>] [--trust-method <value>]
   agent-trust remove (--all | --path <abs> | --prefix <dir>)
     [--agent cursor|claude|codex] [--trust-method <value>] [--home <dir>]
   agent-trust prune [--agent cursor|claude|codex] [--home <dir>]
@@ -50,10 +51,11 @@ interface ParsedArguments {
 }
 
 function parseAgent(value: string): AgentTrustAgent {
-  if (value === "cursor" || value === "claude" || value === "codex") {
-    return value;
+  const normalized = normalizeAgent(value);
+  if (!normalized.ok) {
+    throw new Error(`Unknown agent: ${value}`);
   }
-  throw new Error(`Unknown agent: ${value}`);
+  return normalized.agent;
 }
 
 function readFlagValue(argv: readonly string[], index: number, flag: string): string {

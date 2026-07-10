@@ -60,6 +60,13 @@ describe(main, () => {
     expect(console.log).toHaveBeenCalledWith(expect.stringContaining("Workspace trust"));
   });
 
+  it("accepts cursor-agent as an alias for cursor on add", () => {
+    const workspacePath = path.join(fakeHome, "ws-alias");
+    main(["add", "--agent", "cursor-agent", "--dir", workspacePath, "--home", fakeHome]);
+    expect(process.exitCode).toBeUndefined();
+    expect(console.log).toHaveBeenCalledWith(expect.stringContaining("Added cursor trust"));
+  });
+
   it("passes --trust-method through on remove", () => {
     const groundcrewPath = path.resolve(fakeHome, "gc");
     const manualPath = path.resolve(fakeHome, "manual");
