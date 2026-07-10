@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 import type { AgentTrustedDir, AgentTrustDirResult } from "../types.ts";
-import { isPlainObject, writeFileAtomic } from "./shared.ts";
+import { canonicalizeWorkspacePath, isPlainObject, writeFileAtomic } from "./shared.ts";
 
 interface ClaudeProjectEntry {
   hasTrustDialogAccepted?: boolean;
@@ -45,12 +45,12 @@ function findClaudeProjectKey(
   projects: Record<string, ClaudeProjectEntry>,
   workspacePath: string,
 ): string | undefined {
-  const resolved = path.resolve(workspacePath);
+  const resolved = canonicalizeWorkspacePath(workspacePath);
   if (Object.hasOwn(projects, workspacePath)) {
     return workspacePath;
   }
   for (const key of Object.keys(projects)) {
-    if (path.resolve(key) === resolved) {
+    if (canonicalizeWorkspacePath(key) === resolved) {
       return key;
     }
   }
@@ -62,7 +62,7 @@ export function ensureClaudeTrust(input: {
   homeDir: string;
   trustMethod: string;
 }): AgentTrustDirResult {
-  const absoluteWorkspacePath = path.resolve(input.workspacePath);
+  const absoluteWorkspacePath = canonicalizeWorkspacePath(input.workspacePath);
   const jsonPath = claudeJsonPath(input.homeDir);
   const claudeJson = readClaudeJsonFile(jsonPath);
   const projects = claudeJson.projects ?? {};
@@ -118,7 +118,7 @@ export function listClaudeTrustEntries(homeDir: string): AgentTrustedDir[] {
     }
     entries.push({
       agent: "claude",
-      dirPath: path.resolve(projectPath),
+      dirPath: canonicalizeWorkspacePath(projectPath),
       detail: "hasTrustDialogAccepted",
       store: `${jsonPath}#projects`,
     });

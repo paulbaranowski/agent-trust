@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 
 import type { AgentTrustedDir, AgentTrustDirResult } from "../types.ts";
-import { writeFileAtomic } from "./shared.ts";
+import { canonicalizeWorkspacePath, writeFileAtomic } from "./shared.ts";
 
 const CODEX_TRUST_LEVEL = "trusted";
 const CODEX_PROJECT_HEADER_PATTERN = /\[projects\."((?:[^"\\]|\\.)*)"\]/g;
@@ -94,7 +94,7 @@ export function ensureCodexTrust(input: {
   homeDir: string;
   trustMethod: string;
 }): AgentTrustDirResult {
-  const absoluteWorkspacePath = path.resolve(input.workspacePath);
+  const absoluteWorkspacePath = canonicalizeWorkspacePath(input.workspacePath);
   const codexConfig = codexConfigPath(input.homeDir);
   let existing: string;
   try {
@@ -147,7 +147,9 @@ export function listCodexTrustedProjects(
     if (rawPath === undefined) {
       continue;
     }
-    const workspacePath = path.resolve(unescapeTomlDoubleQuotedString(rawPath));
+    const workspacePath = canonicalizeWorkspacePath(
+      unescapeTomlDoubleQuotedString(rawPath),
+    );
     const header = match[0];
     const headerIndex = match.index;
     if (headerIndex === undefined) {
@@ -207,7 +209,10 @@ export function removeCodexProjectTrust(config: string, absoluteWorkspacePath: s
 export function deleteCodexTrustEntry(homeDir: string, workspacePath: string): boolean {
   const codexConfig = codexConfigPath(homeDir);
   const existing = readCodexConfig(codexConfig);
-  const updated = removeCodexProjectTrust(existing, workspacePath);
+  const updated = removeCodexProjectTrust(
+    existing,
+    canonicalizeWorkspacePath(workspacePath),
+  );
   if (updated !== existing) {
     writeFileAtomic(codexConfig, updated);
   }
