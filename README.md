@@ -6,6 +6,17 @@ Zero runtime dependencies. Requires Node `>=24`. MIT licensed.
 
 **Supported agents:** Cursor (`cursor` / `cursor-agent`), Claude (`claude`), Codex (`codex`).
 
+## Demo
+
+In a fresh directory an agent stops at its first-run trust dialog before it can
+do anything. `agent-trust` pre-seeds that trust so the agent walks straight in,
+and revokes it just as easily. Below, the real Claude Code CLI asks, then skips
+the dialog once trust is recorded, then asks again after it is removed:
+
+![agent-trust seeds Claude Code's directory trust so it skips the first-run trust dialog, then revokes it](media/demo.gif)
+
+_Regenerate the recording with [`vhs media/demo.tape`](media/demo.tape) ([charmbracelet/vhs](https://github.com/charmbracelet/vhs)). It drives the real `claude` binary against a throwaway `$HOME`, so it never touches your own trust stores._
+
 ## Install
 
 ```bash
