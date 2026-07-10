@@ -1,24 +1,24 @@
 export type AgentTrustAgent = "cursor" | "claude" | "codex";
 
-export interface AgentTrustEntry {
+export interface AgentTrustedDir {
   agent: AgentTrustAgent;
-  workspacePath: string;
+  dirPath: string;
   detail: string;
   store: string;
 }
 
-export type TrustResult =
+export type AgentTrustDirResult =
   | {
       ok: true;
       status: "trusted";
       agent: AgentTrustAgent;
-      workspacePath: string;
+      dirPath: string;
     }
   | {
       ok: true;
       status: "already-trusted";
       agent: AgentTrustAgent;
-      workspacePath: string;
+      dirPath: string;
     }
   | {
       ok: true;
@@ -31,22 +31,22 @@ export type TrustResult =
       status: "error";
       error: string;
       agent?: AgentTrustAgent;
-      workspacePath?: string;
+      dirPath?: string;
     };
 
-export interface MutationEntryResult {
+export interface AgentTrustMutationResult {
   agent: AgentTrustAgent;
-  workspacePath: string;
+  dirPath: string;
   deleted: boolean;
   error?: string;
 }
 
-export interface UntrustResult {
-  results: MutationEntryResult[];
+export interface AgentUntrustDirResult {
+  results: AgentTrustMutationResult[];
 }
 
-export interface PruneResult {
-  results: MutationEntryResult[];
+export interface PruneAgentTrustedDirsResult {
+  results: AgentTrustMutationResult[];
 }
 
 export const DEFAULT_TRUST_METHOD = "agent-trust";

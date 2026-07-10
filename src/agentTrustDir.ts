@@ -6,11 +6,11 @@ import { ensureCodexTrust } from "./agents/codex.ts";
 import { ensureCursorTrust } from "./agents/cursor.ts";
 import { resolveHomeDir } from "./agents/shared.ts";
 import { normalizeAgent } from "./normalize.ts";
-import { DEFAULT_TRUST_METHOD, type TrustResult } from "./types.ts";
+import { DEFAULT_TRUST_METHOD, type AgentTrustDirResult } from "./types.ts";
 
-export interface TrustInput {
+export interface AgentTrustDirInput {
   agent: string;
-  workspacePath: string;
+  dirPath: string;
   homeDir?: string;
   trustMethod?: string;
   /** Test seam for `os.homedir()` failures. */
@@ -18,19 +18,19 @@ export interface TrustInput {
 }
 
 /**
- * Resolve a workspace path for the CLI `--dir` flag: blank values fall back to
+ * Resolve a directory path for the CLI `--dir` flag: blank values fall back to
  * `cwd` (usually the directory you run from).
  */
-export function resolveWorkspacePath(input: { workspacePath?: string; cwd?: string }): string {
+export function resolveDirPath(input: { dirPath?: string; cwd?: string }): string {
   const cwd = input.cwd ?? process.cwd();
-  if (input.workspacePath === undefined || input.workspacePath.trim() === "") {
+  if (input.dirPath === undefined || input.dirPath.trim() === "") {
     return path.resolve(cwd);
   }
-  return path.resolve(input.workspacePath);
+  return path.resolve(input.dirPath);
 }
 
-/** Record workspace trust for an agent. Never throws on store I/O — returns a `TrustResult`. */
-export function trust(input: TrustInput): TrustResult {
+/** Record directory trust for an agent. Never throws on store I/O — returns an `AgentTrustDirResult`. */
+export function agentTrustDir(input: AgentTrustDirInput): AgentTrustDirResult {
   const normalized = normalizeAgent(input.agent);
   if (!normalized.ok) {
     return {
@@ -48,13 +48,13 @@ export function trust(input: TrustInput): TrustResult {
       status: "error",
       error: "agent-trust: could not resolve home directory",
       agent: normalized.agent,
-      workspacePath: input.workspacePath,
+      dirPath: input.dirPath,
     };
   }
 
   const trustMethod = input.trustMethod ?? DEFAULT_TRUST_METHOD;
   const args = {
-    workspacePath: input.workspacePath,
+    workspacePath: input.dirPath,
     homeDir: home,
     trustMethod,
   };

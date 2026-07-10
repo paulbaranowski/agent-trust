@@ -5,21 +5,21 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { codexProjectTableHeader } from "./agents/codex.ts";
 import { cursorProjectSlug } from "./agents/cursor.ts";
-import { list } from "./list.ts";
 import {
+  agentUntrustDir,
   deleteTrustEntryForTests,
   matchesDeleteTargetForTests,
   normalizedPrefixForTests,
-  untrust,
-} from "./untrust.ts";
-import type { AgentTrustAgent, AgentTrustEntry } from "./types.ts";
+} from "./agentUntrustDir.ts";
+import { listAgentTrustedDirs } from "./listAgentTrustedDirs.ts";
+import type { AgentTrustAgent, AgentTrustedDir } from "./types.ts";
 
 const TRUST_METHOD = "groundcrew-auto-trust";
 
 describe(matchesDeleteTargetForTests, () => {
-  const entry: AgentTrustEntry = {
+  const entry: AgentTrustedDir = {
     agent: "cursor",
-    workspacePath: "/tmp/ws",
+    dirPath: "/tmp/ws",
     detail: TRUST_METHOD,
     store: "/tmp/.cursor/projects/slug/.workspace-trusted",
   };
@@ -51,7 +51,7 @@ describe(deleteTrustEntryForTests, () => {
     expect(() =>
       deleteTrustEntryForTests("/tmp/home", {
         agent: "invalid" as unknown as AgentTrustAgent,
-        workspacePath: "/tmp/ws",
+        dirPath: "/tmp/ws",
         detail: "trusted",
         store: "/tmp/marker",
       }),
@@ -59,7 +59,7 @@ describe(deleteTrustEntryForTests, () => {
   });
 });
 
-describe(untrust, () => {
+describe(agentUntrustDir, () => {
   let fakeHome: string;
   beforeEach(() => {
     fakeHome = mkdtempSync(path.join(os.tmpdir(), "agent-trust-untrust-"));
@@ -69,7 +69,7 @@ describe(untrust, () => {
   });
 
   it("throws when no target is provided", () => {
-    expect(() => untrust({ homeDir: fakeHome })).toThrow(
+    expect(() => agentUntrustDir({ homeDir: fakeHome })).toThrow(
       "untrust requires all, path, or pathPrefix",
     );
   });
@@ -84,9 +84,9 @@ describe(untrust, () => {
       "utf8",
     );
 
-    const { results } = untrust({ homeDir: fakeHome, path: childPath });
+    const { results } = agentUntrustDir({ homeDir: fakeHome, path: childPath });
     expect(results).toEqual([
-      { agent: "codex", workspacePath: path.resolve(childPath), deleted: true },
+      { agent: "codex", dirPath: path.resolve(childPath), deleted: true },
     ]);
   });
 
@@ -105,10 +105,14 @@ describe(untrust, () => {
       "utf8",
     );
 
-    const { results } = untrust({ homeDir: fakeHome, agent: "claude", pathPrefix: parentPath });
+    const { results } = agentUntrustDir({
+      homeDir: fakeHome,
+      agent: "claude",
+      pathPrefix: parentPath,
+    });
     expect(results).toHaveLength(2);
     expect(results.every((result) => result.deleted)).toBe(true);
-    expect(list({ homeDir: fakeHome, agent: "claude" })).toHaveLength(1);
+    expect(listAgentTrustedDirs({ homeDir: fakeHome, agent: "claude" })).toHaveLength(1);
   });
 
   it("deletes only markers matching a trustMethod", () => {
@@ -129,15 +133,17 @@ describe(untrust, () => {
       writeFileSync(markerPath, `${JSON.stringify({ workspacePath, trustMethod })}\n`, "utf8");
     }
 
-    const { results } = untrust({
+    const { results } = agentUntrustDir({
       homeDir: fakeHome,
       agent: "cursor",
       all: true,
       trustMethod: TRUST_METHOD,
     });
-    expect(results).toEqual([{ agent: "cursor", workspacePath: gcPath, deleted: true }]);
-    expect(list({ homeDir: fakeHome, agent: "cursor" })).toHaveLength(1);
-    expect(list({ homeDir: fakeHome, agent: "cursor" })[0]?.workspacePath).toBe(manualPath);
+    expect(results).toEqual([{ agent: "cursor", dirPath: gcPath, deleted: true }]);
+    expect(listAgentTrustedDirs({ homeDir: fakeHome, agent: "cursor" })).toHaveLength(1);
+    expect(listAgentTrustedDirs({ homeDir: fakeHome, agent: "cursor" })[0]?.dirPath).toBe(
+      manualPath,
+    );
   });
 
   it("returns no results when nothing matches", () => {
@@ -147,7 +153,9 @@ describe(untrust, () => {
       JSON.stringify({ projects: { [workspacePath]: { hasTrustDialogAccepted: true } } }),
       "utf8",
     );
-    expect(untrust({ homeDir: fakeHome, agent: "codex", path: workspacePath }).results).toEqual([]);
+    expect(
+      agentUntrustDir({ homeDir: fakeHome, agent: "codex", path: workspacePath }).results,
+    ).toEqual([]);
   });
 
   it("deletes Cursor trust using the listed marker path", () => {
@@ -157,14 +165,14 @@ describe(untrust, () => {
     mkdirSync(path.dirname(markerPath), { recursive: true });
     writeFileSync(markerPath, `${JSON.stringify({ workspacePath, trustMethod: "manual" })}\n`, "utf8");
 
-    const { results } = untrust({ homeDir: fakeHome, agent: "cursor", path: workspacePath });
-    expect(results).toEqual([{ agent: "cursor", workspacePath, deleted: true }]);
+    const { results } = agentUntrustDir({ homeDir: fakeHome, agent: "cursor", path: workspacePath });
+    expect(results).toEqual([{ agent: "cursor", dirPath: workspacePath, deleted: true }]);
     expect(existsSync(markerPath)).toBe(false);
   });
 
   it("returns [] results when home cannot be resolved", () => {
     expect(
-      untrust({
+      agentUntrustDir({
         all: true,
         readHome: () => {
           throw new Error("no home");
@@ -183,7 +191,7 @@ describe(untrust, () => {
       "utf8",
     );
 
-    untrust({ homeDir: fakeHome, path: workspacePath });
+    agentUntrustDir({ homeDir: fakeHome, path: workspacePath });
     const projects = (
       JSON.parse(readFileSync(path.join(fakeHome, ".claude.json"), "utf8")) as {
         projects: Record<string, Record<string, unknown>>;

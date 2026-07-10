@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
-import type { AgentTrustEntry, TrustResult } from "../types.ts";
+import type { AgentTrustedDir, AgentTrustDirResult } from "../types.ts";
 import { writeFileAtomic } from "./shared.ts";
 
 const CODEX_TRUST_LEVEL = "trusted";
@@ -83,7 +83,7 @@ export function ensureCodexTrust(input: {
   workspacePath: string;
   homeDir: string;
   trustMethod: string;
-}): TrustResult {
+}): AgentTrustDirResult {
   const absoluteWorkspacePath = path.resolve(input.workspacePath);
   const codexConfig = codexConfigPath(input.homeDir);
   const existing = readCodexConfig(codexConfig);
@@ -93,7 +93,7 @@ export function ensureCodexTrust(input: {
       ok: true,
       status: "already-trusted",
       agent: "codex",
-      workspacePath: absoluteWorkspacePath,
+      dirPath: absoluteWorkspacePath,
     };
   }
 
@@ -105,7 +105,7 @@ export function ensureCodexTrust(input: {
       status: "error",
       error: `agent-trust: could not seed Codex workspace trust for ${absoluteWorkspacePath} (${String(error)})`,
       agent: "codex",
-      workspacePath: absoluteWorkspacePath,
+      dirPath: absoluteWorkspacePath,
     };
   }
 
@@ -113,7 +113,7 @@ export function ensureCodexTrust(input: {
     ok: true,
     status: "trusted",
     agent: "codex",
-    workspacePath: absoluteWorkspacePath,
+    dirPath: absoluteWorkspacePath,
   };
 }
 
@@ -142,11 +142,11 @@ export function listCodexTrustedProjects(
   return entries.toSorted((a, b) => a.path.localeCompare(b.path));
 }
 
-export function listCodexTrustEntries(homeDir: string): AgentTrustEntry[] {
+export function listCodexTrustEntries(homeDir: string): AgentTrustedDir[] {
   const codexConfig = codexConfigPath(homeDir);
   return listCodexTrustedProjects(readCodexConfig(codexConfig)).map((entry) => ({
     agent: "codex" as const,
-    workspacePath: entry.path,
+    dirPath: entry.path,
     detail: `trust_level=${entry.trustLevel}`,
     store: codexConfig,
   }));

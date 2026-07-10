@@ -2,12 +2,16 @@
 
 import { homedir } from "node:os";
 
-import { formatTrustActionResults, formatTrustList, shortenTrustPath } from "./format.ts";
-import { list } from "./list.ts";
-import { prune } from "./prune.ts";
-import { resolveWorkspacePath, trust } from "./trust.ts";
+import { agentTrustDir, resolveDirPath } from "./agentTrustDir.ts";
+import { agentUntrustDir } from "./agentUntrustDir.ts";
+import {
+  formatAgentTrustActionResults,
+  formatAgentTrustedDirList,
+  shortenDirPath,
+} from "./format.ts";
+import { listAgentTrustedDirs } from "./listAgentTrustedDirs.ts";
+import { pruneAgentTrustedDirs } from "./pruneAgentTrustedDirs.ts";
 import type { AgentTrustAgent } from "./types.ts";
-import { untrust } from "./untrust.ts";
 
 const USAGE = `Usage:
   agent-trust list [--agent cursor|claude|codex] [--missing] [--home <dir>]
@@ -29,7 +33,7 @@ interface ParsedArguments {
   command?: "list" | "add" | "remove" | "prune";
   agent?: AgentTrustAgent;
   homeDir: string;
-  workspacePath?: string;
+  dirPath?: string;
   path?: string;
   pathPrefix?: string;
   trustMethod?: string;
@@ -79,7 +83,7 @@ function applyArgument(
       return index + 1;
     }
     case "--dir": {
-      parsed.workspacePath = readFlagValue(argv, index, arg);
+      parsed.dirPath = readFlagValue(argv, index, arg);
       return index + 1;
     }
     case "--prefix": {
@@ -133,17 +137,17 @@ function runAdd(parsed: ParsedArguments): void {
   if (parsed.agent === undefined) {
     throw new Error("add requires --agent");
   }
-  const workspacePath = resolveWorkspacePath(
-    parsed.workspacePath === undefined ? {} : { workspacePath: parsed.workspacePath },
+  const dirPath = resolveDirPath(
+    parsed.dirPath === undefined ? {} : { dirPath: parsed.dirPath },
   );
-  const result = trust({
+  const result = agentTrustDir({
     agent: parsed.agent,
-    workspacePath,
+    dirPath,
     homeDir: parsed.homeDir,
     ...(parsed.trustMethod === undefined ? {} : { trustMethod: parsed.trustMethod }),
   });
 
-  const shortPath = shortenTrustPath(workspacePath, parsed.homeDir);
+  const shortPath = shortenDirPath(dirPath, parsed.homeDir);
   switch (result.status) {
     case "trusted":
       console.log(`Added ${result.agent} trust for ${shortPath}`);
@@ -166,13 +170,13 @@ export function main(argv: readonly string[]): void {
   const parsed = parseArguments(argv);
 
   if (parsed.command === "list") {
-    const entries = list({
+    const entries = listAgentTrustedDirs({
       homeDir: parsed.homeDir,
       missingOnly: parsed.missingOnly,
       ...(parsed.agent === undefined ? {} : { agent: parsed.agent }),
     });
     console.log(
-      formatTrustList(entries, {
+      formatAgentTrustedDirList(entries, {
         homeDir: parsed.homeDir,
         missingOnly: parsed.missingOnly,
       }),
@@ -186,11 +190,13 @@ export function main(argv: readonly string[]): void {
   }
 
   if (parsed.command === "prune") {
-    const { results } = prune({
+    const { results } = pruneAgentTrustedDirs({
       homeDir: parsed.homeDir,
       ...(parsed.agent === undefined ? {} : { agent: parsed.agent }),
     });
-    console.log(formatTrustActionResults(results, { homeDir: parsed.homeDir, action: "prune" }));
+    console.log(
+      formatAgentTrustActionResults(results, { homeDir: parsed.homeDir, action: "prune" }),
+    );
     return;
   }
 
@@ -200,7 +206,7 @@ export function main(argv: readonly string[]): void {
     throw new Error("remove requires --all, --path, or --prefix");
   }
 
-  const { results } = untrust({
+  const { results } = agentUntrustDir({
     homeDir: parsed.homeDir,
     all: parsed.all,
     ...(parsed.agent === undefined ? {} : { agent: parsed.agent }),
@@ -208,7 +214,7 @@ export function main(argv: readonly string[]): void {
     ...(parsed.pathPrefix === undefined ? {} : { pathPrefix: parsed.pathPrefix }),
     ...(parsed.trustMethod === undefined ? {} : { trustMethod: parsed.trustMethod }),
   });
-  console.log(formatTrustActionResults(results, { homeDir: parsed.homeDir, action: "remove" }));
+  console.log(formatAgentTrustActionResults(results, { homeDir: parsed.homeDir, action: "remove" }));
 }
 
 const isDirectRun =

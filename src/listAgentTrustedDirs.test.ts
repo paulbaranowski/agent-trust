@@ -5,9 +5,9 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { codexProjectTableHeader } from "./agents/codex.ts";
 import { cursorProjectSlug } from "./agents/cursor.ts";
-import { isMissingAgentTrustEntry, list } from "./list.ts";
+import { isMissingAgentTrustedDir, listAgentTrustedDirs } from "./listAgentTrustedDirs.ts";
 
-describe(list, () => {
+describe(listAgentTrustedDirs, () => {
   let fakeHome: string;
   beforeEach(() => {
     fakeHome = mkdtempSync(path.join(os.tmpdir(), "agent-trust-list-"));
@@ -47,14 +47,14 @@ describe(list, () => {
       "utf8",
     );
 
-    const entries = list({ homeDir: fakeHome });
+    const entries = listAgentTrustedDirs({ homeDir: fakeHome });
     expect(entries).toHaveLength(3);
     expect(entries.map((entry) => entry.agent).toSorted()).toEqual(["claude", "codex", "cursor"]);
   });
 
   it("filters by agent", () => {
     writeFileSync(path.join(fakeHome, ".claude.json"), "[]", "utf8");
-    expect(list({ homeDir: fakeHome, agent: "claude" })).toEqual([]);
+    expect(listAgentTrustedDirs({ homeDir: fakeHome, agent: "claude" })).toEqual([]);
   });
 
   it("lists only missing workspace paths when requested", () => {
@@ -72,14 +72,14 @@ describe(list, () => {
       "utf8",
     );
 
-    expect(list({ homeDir: fakeHome, missingOnly: true })).toEqual([
-      expect.objectContaining({ agent: "claude", workspacePath: missingPath }),
+    expect(listAgentTrustedDirs({ homeDir: fakeHome, missingOnly: true })).toEqual([
+      expect.objectContaining({ agent: "claude", dirPath: missingPath }),
     ]);
   });
 
   it("returns [] when home cannot be resolved", () => {
     expect(
-      list({
+      listAgentTrustedDirs({
         readHome: () => {
           throw new Error("no home");
         },
@@ -88,12 +88,12 @@ describe(list, () => {
   });
 });
 
-describe(isMissingAgentTrustEntry, () => {
+describe(isMissingAgentTrustedDir, () => {
   it("returns true for a path that does not exist", () => {
     expect(
-      isMissingAgentTrustEntry({
+      isMissingAgentTrustedDir({
         agent: "claude",
-        workspacePath: "/tmp/agent-trust-definitely-missing-xyz",
+        dirPath: "/tmp/agent-trust-definitely-missing-xyz",
         detail: "hasTrustDialogAccepted",
         store: "/tmp/.claude.json#projects",
       }),
@@ -103,9 +103,9 @@ describe(isMissingAgentTrustEntry, () => {
   it("returns false for a path that exists", () => {
     const dir = mkdtempSync(path.join(os.tmpdir(), "agent-trust-exists-"));
     expect(
-      isMissingAgentTrustEntry({
+      isMissingAgentTrustedDir({
         agent: "claude",
-        workspacePath: dir,
+        dirPath: dir,
         detail: "hasTrustDialogAccepted",
         store: "/tmp/.claude.json#projects",
       }),

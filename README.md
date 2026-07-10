@@ -18,15 +18,15 @@ npm i @paulbaranowski/agent-trust
 
 ## Library
 
-`trust()` records workspace trust for an agent. It never throws on store I/O —
-it returns a `TrustResult` discriminated union.
+`agentTrustDir()` records directory trust for an agent. It never throws on store
+I/O — it returns an `AgentTrustDirResult` discriminated union.
 
 ```ts
-import { trust } from "@paulbaranowski/agent-trust";
+import { agentTrustDir } from "@paulbaranowski/agent-trust";
 
-const result = trust({
+const result = agentTrustDir({
   agent: "cursor", // "cursor" | "cursor-agent" | "claude" | "codex"
-  workspacePath: process.cwd(),
+  dirPath: process.cwd(),
   // trustMethod defaults to "agent-trust"; Cursor markers record it.
   trustMethod: "groundcrew-auto-trust",
 });
@@ -44,22 +44,18 @@ if (!result.ok) {
   marker; Claude and Codex accept the parameter for API uniformity but do not
   store it. Groundcrew callers should pass `"groundcrew-auto-trust"`.
 
-Other exports: `list`, `untrust`, `prune`, `isMissingAgentTrustEntry`,
-`normalizeAgent`, `isAgentTrustAgent`, `resolveWorkspacePath`, the format
-helpers (`formatTrustList`, `formatTrustActionResults`, `shortenTrustPath`), and
-all types (`TrustResult`, `AgentTrustEntry`, `MutationEntryResult`,
-`UntrustResult`, `PruneResult`, `DEFAULT_TRUST_METHOD`).
+Other exports: `listAgentTrustedDirs`, `agentUntrustDir`,
+`pruneAgentTrustedDirs`, `isMissingAgentTrustedDir`, `normalizeAgent`,
+`isAgentTrustAgent`, `resolveDirPath`, the format helpers
+(`formatAgentTrustedDirList`, `formatAgentTrustActionResults`, `shortenDirPath`),
+and all types (`AgentTrustDirResult`, `AgentTrustedDir`,
+`AgentTrustMutationResult`, `AgentUntrustDirResult`,
+`PruneAgentTrustedDirsResult`, `DEFAULT_TRUST_METHOD`).
 
-`untrust()` and `prune()` return `{ results: MutationEntryResult[] }`.
+`agentUntrustDir()` and `pruneAgentTrustedDirs()` return
+`{ results: AgentTrustMutationResult[] }`.
 
 ## CLI
-
-| Command  | Description                                                         |
-| -------- | ------------------------------------------------------------------- |
-| `list`   | List workspace trust entries for Cursor, Claude, and Codex.         |
-| `add`    | Record trust for a workspace (`--agent`, optional `--dir`).         |
-| `remove` | Delete trust entries (`--all`, `--path`, or `--prefix`).            |
-| `prune`  | Remove trust entries whose workspace paths no longer exist on disk. |
 
 ```
 agent-trust list [--agent cursor|claude|codex] [--missing] [--home <dir>]
@@ -69,11 +65,54 @@ agent-trust remove (--all | --path <abs> | --prefix <dir>)
 agent-trust prune [--agent cursor|claude|codex] [--home <dir>]
 ```
 
-`--trust-method` on `remove` filters Cursor markers to those recorded with the
-matching trust method, e.g. to remove only auto-seeded markers:
+### `list`
+
+Shows trusted workspaces recorded for Cursor, Claude, and Codex. Paths under
+your home directory are shortened with `~`. Missing paths (directory gone from
+disk) are marked. Use `--agent` to limit to one agent, or `--missing` to show
+only stale entries.
 
 ```bash
+agent-trust list
+agent-trust list --agent claude
+agent-trust list --missing
+```
+
+### `add`
+
+Records trust for a workspace so the agent skips its first-run trust dialog.
+`--agent` is required (`cursor`, `claude`, or `codex`). `--dir` defaults to the
+current working directory. Cursor markers store `--trust-method` (default
+`agent-trust`); pass a custom value when you need to filter those markers later.
+
+```bash
+agent-trust add --agent claude --dir "$PWD"
+agent-trust add --agent cursor --dir "$PWD" --trust-method groundcrew-auto-trust
+agent-trust add --agent codex
+```
+
+### `remove`
+
+Deletes trust entries. You must pass exactly one target style: `--all`,
+`--path <abs>`, or `--prefix <dir>`. Optionally narrow with `--agent`. On
+Cursor, `--trust-method` keeps only markers whose stored method matches (useful
+for clearing auto-seeded entries without touching manual ones).
+
+```bash
+agent-trust remove --path "$HOME/worktrees/repo-team-1"
+agent-trust remove --prefix "$HOME/worktrees" --agent claude
 agent-trust remove --all --agent cursor --trust-method groundcrew-auto-trust
+```
+
+### `prune`
+
+Removes trust entries whose workspace path no longer exists on disk. Same as
+`list --missing` followed by deleting those entries. Optionally limit with
+`--agent`.
+
+```bash
+agent-trust prune
+agent-trust prune --agent codex
 ```
 
 ## License

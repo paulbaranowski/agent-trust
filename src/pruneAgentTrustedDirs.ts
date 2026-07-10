@@ -1,19 +1,21 @@
 import { homedir } from "node:os";
 
 import { resolveHomeDir } from "./agents/shared.ts";
-import { collectTrustEntries } from "./list.ts";
-import { deleteTrustEntrySafe } from "./untrust.ts";
-import type { AgentTrustAgent, PruneResult } from "./types.ts";
+import { collectTrustEntries } from "./listAgentTrustedDirs.ts";
+import { deleteTrustEntrySafe } from "./agentUntrustDir.ts";
+import type { AgentTrustAgent, PruneAgentTrustedDirsResult } from "./types.ts";
 
-export interface PruneInput {
+export interface PruneAgentTrustedDirsInput {
   homeDir?: string;
   agent?: AgentTrustAgent;
   /** Test seam for `os.homedir()` failures. */
   readHome?: () => string;
 }
 
-/** Remove trust entries whose workspace paths no longer exist on disk. */
-export function prune(input: PruneInput = {}): PruneResult {
+/** Remove trust entries whose directory paths no longer exist on disk. */
+export function pruneAgentTrustedDirs(
+  input: PruneAgentTrustedDirsInput = {},
+): PruneAgentTrustedDirsResult {
   const home = resolveHomeDir(input.homeDir, input.readHome ?? homedir);
   if (home === undefined) {
     return { results: [] };

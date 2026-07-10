@@ -4,10 +4,10 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { codexProjectTableHeader } from "./agents/codex.ts";
-import { list } from "./list.ts";
-import { prune } from "./prune.ts";
+import { listAgentTrustedDirs } from "./listAgentTrustedDirs.ts";
+import { pruneAgentTrustedDirs } from "./pruneAgentTrustedDirs.ts";
 
-describe(prune, () => {
+describe(pruneAgentTrustedDirs, () => {
   let fakeHome: string;
   beforeEach(() => {
     fakeHome = mkdtempSync(path.join(os.tmpdir(), "agent-trust-prune-"));
@@ -37,15 +37,15 @@ describe(prune, () => {
       "utf8",
     );
 
-    const { results } = prune({ homeDir: fakeHome });
+    const { results } = pruneAgentTrustedDirs({ homeDir: fakeHome });
     expect(results).toEqual(
       expect.arrayContaining([
-        { agent: "claude", workspacePath: missingPath, deleted: true },
-        { agent: "codex", workspacePath: missingPath, deleted: true },
+        { agent: "claude", dirPath: missingPath, deleted: true },
+        { agent: "codex", dirPath: missingPath, deleted: true },
       ]),
     );
-    expect(list({ homeDir: fakeHome, agent: "claude" })).toHaveLength(1);
-    expect(list({ homeDir: fakeHome, agent: "codex" })).toEqual([]);
+    expect(listAgentTrustedDirs({ homeDir: fakeHome, agent: "claude" })).toHaveLength(1);
+    expect(listAgentTrustedDirs({ homeDir: fakeHome, agent: "codex" })).toEqual([]);
   });
 
   it("prunes only the requested agent", () => {
@@ -70,16 +70,14 @@ describe(prune, () => {
       "utf8",
     );
 
-    const { results } = prune({ homeDir: fakeHome, agent: "claude" });
-    expect(results).toEqual([
-      { agent: "claude", workspacePath: missingClaudePath, deleted: true },
-    ]);
-    expect(list({ homeDir: fakeHome, agent: "codex" })).toHaveLength(1);
+    const { results } = pruneAgentTrustedDirs({ homeDir: fakeHome, agent: "claude" });
+    expect(results).toEqual([{ agent: "claude", dirPath: missingClaudePath, deleted: true }]);
+    expect(listAgentTrustedDirs({ homeDir: fakeHome, agent: "codex" })).toHaveLength(1);
   });
 
   it("returns [] results when home cannot be resolved", () => {
     expect(
-      prune({
+      pruneAgentTrustedDirs({
         readHome: () => {
           throw new Error("no home");
         },

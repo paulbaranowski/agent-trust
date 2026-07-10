@@ -3,25 +3,29 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { formatTrustActionResults, formatTrustList, shortenTrustPath } from "./format.ts";
+import {
+  formatAgentTrustActionResults,
+  formatAgentTrustedDirList,
+  shortenDirPath,
+} from "./format.ts";
 
-describe(shortenTrustPath, () => {
+describe(shortenDirPath, () => {
   it("replaces the home directory prefix with tilde", () => {
     const home = "/Users/test";
-    expect(shortenTrustPath("/Users/test/dev/repo", home)).toBe("~/dev/repo");
-    expect(shortenTrustPath("/Users/test", home)).toBe("~");
+    expect(shortenDirPath("/Users/test/dev/repo", home)).toBe("~/dev/repo");
+    expect(shortenDirPath("/Users/test", home)).toBe("~");
   });
 
   it("leaves paths outside the home directory unchanged", () => {
-    expect(shortenTrustPath("/tmp/ws", "/Users/test")).toBe("/tmp/ws");
+    expect(shortenDirPath("/tmp/ws", "/Users/test")).toBe("/tmp/ws");
   });
 
   it("handles home directories that already end with a separator", () => {
-    expect(shortenTrustPath("/foo/bar", "/")).toBe(`~${path.sep}foo${path.sep}bar`);
+    expect(shortenDirPath("/foo/bar", "/")).toBe(`~${path.sep}foo${path.sep}bar`);
   });
 });
 
-describe(formatTrustList, () => {
+describe(formatAgentTrustedDirList, () => {
   let fakeHome: string;
   let existingPath: string;
 
@@ -37,17 +41,17 @@ describe(formatTrustList, () => {
 
   it("groups entries by agent without redundant trust detail lines", () => {
     const missingPath = path.join(fakeHome, "gone");
-    const formatted = formatTrustList(
+    const formatted = formatAgentTrustedDirList(
       [
         {
           agent: "claude",
-          workspacePath: existingPath,
+          dirPath: existingPath,
           detail: "hasTrustDialogAccepted",
           store: `${fakeHome}/.claude.json#projects`,
         },
         {
           agent: "cursor",
-          workspacePath: missingPath,
+          dirPath: missingPath,
           detail: "agent-trust",
           store: `${fakeHome}/.cursor/projects/slug/.workspace-trusted`,
         },
@@ -57,9 +61,9 @@ describe(formatTrustList, () => {
 
     expect(formatted).toContain("Workspace trust (2 entries · 1 missing)");
     expect(formatted).toContain("Claude (1)");
-    expect(formatted).toContain(`✓  ${shortenTrustPath(existingPath, fakeHome)}`);
+    expect(formatted).toContain(`✓  ${shortenDirPath(existingPath, fakeHome)}`);
     expect(formatted).toContain("Cursor (1)");
-    expect(formatted).toContain(`✗  ${shortenTrustPath(missingPath, fakeHome)}`);
+    expect(formatted).toContain(`✗  ${shortenDirPath(missingPath, fakeHome)}`);
     expect(formatted).toContain("[missing]");
     expect(formatted).not.toContain("hasTrustDialogAccepted");
     expect(formatted).not.toContain("agent-trust\n");
@@ -67,11 +71,11 @@ describe(formatTrustList, () => {
 
   it("uses a singular header when one listed entry is missing", () => {
     const missingPath = path.join(fakeHome, "gone");
-    const formatted = formatTrustList(
+    const formatted = formatAgentTrustedDirList(
       [
         {
           agent: "claude",
-          workspacePath: missingPath,
+          dirPath: missingPath,
           detail: "hasTrustDialogAccepted",
           store: `${fakeHome}/.claude.json#projects`,
         },
@@ -83,11 +87,11 @@ describe(formatTrustList, () => {
   });
 
   it("shows a warning only for unparseable Cursor markers", () => {
-    const formatted = formatTrustList(
+    const formatted = formatAgentTrustedDirList(
       [
         {
           agent: "cursor",
-          workspacePath: existingPath,
+          dirPath: existingPath,
           detail: "trusted (unparseable marker)",
           store: `${fakeHome}/.cursor/projects/slug/.workspace-trusted`,
         },
@@ -101,11 +105,11 @@ describe(formatTrustList, () => {
   });
 
   it("uses a stale header when listing missing entries only", () => {
-    const formatted = formatTrustList(
+    const formatted = formatAgentTrustedDirList(
       [
         {
           agent: "codex",
-          workspacePath: path.join(fakeHome, "gone"),
+          dirPath: path.join(fakeHome, "gone"),
           detail: "trust_level=trusted",
           store: `${fakeHome}/.codex/config.toml`,
         },
@@ -123,17 +127,17 @@ describe(formatTrustList, () => {
     mkdirSync(firstPath, { recursive: true });
     mkdirSync(secondPath, { recursive: true });
 
-    const staleFormatted = formatTrustList(
+    const staleFormatted = formatAgentTrustedDirList(
       [
         {
           agent: "claude",
-          workspacePath: path.join(fakeHome, "gone-1"),
+          dirPath: path.join(fakeHome, "gone-1"),
           detail: "hasTrustDialogAccepted",
           store: `${fakeHome}/.claude.json#projects`,
         },
         {
           agent: "codex",
-          workspacePath: path.join(fakeHome, "gone-2"),
+          dirPath: path.join(fakeHome, "gone-2"),
           detail: "trust_level=trusted",
           store: `${fakeHome}/.codex/config.toml`,
         },
@@ -142,17 +146,17 @@ describe(formatTrustList, () => {
     );
     expect(staleFormatted).toContain("Stale workspace trust (2 entries)");
 
-    const allPresentFormatted = formatTrustList(
+    const allPresentFormatted = formatAgentTrustedDirList(
       [
         {
           agent: "claude",
-          workspacePath: firstPath,
+          dirPath: firstPath,
           detail: "hasTrustDialogAccepted",
           store: `${fakeHome}/.claude.json#projects`,
         },
         {
           agent: "codex",
-          workspacePath: secondPath,
+          dirPath: secondPath,
           detail: "trust_level=trusted",
           store: `${fakeHome}/.codex/config.toml`,
         },
@@ -164,24 +168,26 @@ describe(formatTrustList, () => {
   });
 
   it("reports when list is empty", () => {
-    expect(formatTrustList([], { homeDir: fakeHome })).toBe("No workspace trust entries found.");
+    expect(formatAgentTrustedDirList([], { homeDir: fakeHome })).toBe(
+      "No workspace trust entries found.",
+    );
   });
 
   it("reports when stale list is empty", () => {
-    expect(formatTrustList([], { homeDir: fakeHome, missingOnly: true })).toBe(
+    expect(formatAgentTrustedDirList([], { homeDir: fakeHome, missingOnly: true })).toBe(
       "No stale workspace trust entries.",
     );
   });
 });
 
-describe(formatTrustActionResults, () => {
+describe(formatAgentTrustActionResults, () => {
   const fakeHome = "/Users/test";
 
   it("renders prune results without trust metadata", () => {
-    const formatted = formatTrustActionResults(
+    const formatted = formatAgentTrustActionResults(
       [
-        { agent: "claude", workspacePath: "/Users/test/gone", deleted: true },
-        { agent: "cursor", workspacePath: "/Users/test/stuck", deleted: false },
+        { agent: "claude", dirPath: "/Users/test/gone", deleted: true },
+        { agent: "cursor", dirPath: "/Users/test/stuck", deleted: false },
       ],
       { homeDir: fakeHome, action: "prune" },
     );
@@ -193,10 +199,10 @@ describe(formatTrustActionResults, () => {
   });
 
   it("uses plural nouns when multiple entries are removed", () => {
-    const formatted = formatTrustActionResults(
+    const formatted = formatAgentTrustActionResults(
       [
-        { agent: "claude", workspacePath: "/Users/test/one", deleted: true },
-        { agent: "codex", workspacePath: "/Users/test/two", deleted: true },
+        { agent: "claude", dirPath: "/Users/test/one", deleted: true },
+        { agent: "codex", dirPath: "/Users/test/two", deleted: true },
       ],
       { homeDir: fakeHome, action: "prune" },
     );
@@ -205,20 +211,20 @@ describe(formatTrustActionResults, () => {
   });
 
   it("reports when remove finds no matches", () => {
-    expect(formatTrustActionResults([], { homeDir: fakeHome, action: "remove" })).toBe(
+    expect(formatAgentTrustActionResults([], { homeDir: fakeHome, action: "remove" })).toBe(
       "No matching workspace trust entries.",
     );
   });
 
   it("reports when prune finds nothing to remove", () => {
-    expect(formatTrustActionResults([], { homeDir: fakeHome, action: "prune" })).toBe(
+    expect(formatAgentTrustActionResults([], { homeDir: fakeHome, action: "prune" })).toBe(
       "No stale workspace trust entries.",
     );
   });
 
   it("renders remove results without a failure summary when everything succeeds", () => {
-    const formatted = formatTrustActionResults(
-      [{ agent: "claude", workspacePath: "/Users/test/gone", deleted: true }],
+    const formatted = formatAgentTrustActionResults(
+      [{ agent: "claude", dirPath: "/Users/test/gone", deleted: true }],
       { homeDir: fakeHome, action: "remove" },
     );
 

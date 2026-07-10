@@ -5,39 +5,39 @@ import { listClaudeTrustEntries } from "./agents/claude.ts";
 import { listCodexTrustEntries } from "./agents/codex.ts";
 import { listCursorTrustEntries } from "./agents/cursor.ts";
 import { resolveHomeDir } from "./agents/shared.ts";
-import type { AgentTrustAgent, AgentTrustEntry } from "./types.ts";
+import type { AgentTrustAgent, AgentTrustedDir } from "./types.ts";
 
-export interface ListInput {
+export interface ListAgentTrustedDirsInput {
   agent?: AgentTrustAgent;
   homeDir?: string;
-  /** When true, only return entries whose workspace path no longer exists. */
+  /** When true, only return entries whose directory path no longer exists. */
   missingOnly?: boolean;
   /** Test seam for `os.homedir()` failures. */
   readHome?: () => string;
 }
 
-function workspacePathExists(workspacePath: string): boolean {
+function dirPathExists(dirPath: string): boolean {
   try {
-    return existsSync(workspacePath);
+    return existsSync(dirPath);
   } catch {
     return false;
   }
 }
 
-/** Whether the trusted workspace path no longer exists on disk. */
-export function isMissingAgentTrustEntry(entry: AgentTrustEntry): boolean {
-  return !workspacePathExists(entry.workspacePath);
+/** Whether the trusted directory path no longer exists on disk. */
+export function isMissingAgentTrustedDir(entry: AgentTrustedDir): boolean {
+  return !dirPathExists(entry.dirPath);
 }
 
-/** Collect trust entries for a resolved home directory. Internal helper for list/untrust/prune. */
+/** Collect trusted dirs for a resolved home directory. Internal helper for list/untrust/prune. */
 export function collectTrustEntries(input: {
   homeDir: string;
   agent?: AgentTrustAgent;
   missingOnly?: boolean;
-}): AgentTrustEntry[] {
+}): AgentTrustedDir[] {
   const agents: AgentTrustAgent[] =
     input.agent === undefined ? ["cursor", "claude", "codex"] : [input.agent];
-  const entries: AgentTrustEntry[] = [];
+  const entries: AgentTrustedDir[] = [];
   if (agents.includes("cursor")) {
     entries.push(...listCursorTrustEntries(input.homeDir));
   }
@@ -48,15 +48,15 @@ export function collectTrustEntries(input: {
     entries.push(...listCodexTrustEntries(input.homeDir));
   }
   const filtered =
-    input.missingOnly === true ? entries.filter(isMissingAgentTrustEntry) : entries;
+    input.missingOnly === true ? entries.filter(isMissingAgentTrustedDir) : entries;
   return filtered.toSorted((a, b) => {
     const agentOrder = a.agent.localeCompare(b.agent);
-    return agentOrder === 0 ? a.workspacePath.localeCompare(b.workspacePath) : agentOrder;
+    return agentOrder === 0 ? a.dirPath.localeCompare(b.dirPath) : agentOrder;
   });
 }
 
-/** List workspace trust entries recorded for Cursor, Claude, and Codex. */
-export function list(input: ListInput = {}): AgentTrustEntry[] {
+/** List directory trust entries recorded for Cursor, Claude, and Codex. */
+export function listAgentTrustedDirs(input: ListAgentTrustedDirsInput = {}): AgentTrustedDir[] {
   const home = resolveHomeDir(input.homeDir, input.readHome ?? homedir);
   if (home === undefined) {
     return [];

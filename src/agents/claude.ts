@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
-import type { AgentTrustEntry, TrustResult } from "../types.ts";
+import type { AgentTrustedDir, AgentTrustDirResult } from "../types.ts";
 import { isPlainObject, writeFileAtomic } from "./shared.ts";
 
 interface ClaudeProjectEntry {
@@ -45,7 +45,7 @@ export function ensureClaudeTrust(input: {
   workspacePath: string;
   homeDir: string;
   trustMethod: string;
-}): TrustResult {
+}): AgentTrustDirResult {
   const absoluteWorkspacePath = path.resolve(input.workspacePath);
   const jsonPath = claudeJsonPath(input.homeDir);
   const claudeJson = readClaudeJsonFile(jsonPath);
@@ -57,7 +57,7 @@ export function ensureClaudeTrust(input: {
       ok: true,
       status: "already-trusted",
       agent: "claude",
-      workspacePath: absoluteWorkspacePath,
+      dirPath: absoluteWorkspacePath,
     };
   }
 
@@ -76,7 +76,7 @@ export function ensureClaudeTrust(input: {
       status: "error",
       error: `agent-trust: could not seed Claude workspace trust for ${absoluteWorkspacePath} (${String(error)})`,
       agent: "claude",
-      workspacePath: absoluteWorkspacePath,
+      dirPath: absoluteWorkspacePath,
     };
   }
 
@@ -84,27 +84,28 @@ export function ensureClaudeTrust(input: {
     ok: true,
     status: "trusted",
     agent: "claude",
-    workspacePath: absoluteWorkspacePath,
+    dirPath: absoluteWorkspacePath,
   };
 }
 
-export function listClaudeTrustEntries(homeDir: string): AgentTrustEntry[] {
+export function listClaudeTrustEntries(homeDir: string): AgentTrustedDir[] {
   const jsonPath = claudeJsonPath(homeDir);
   const claudeJson = readClaudeJsonFile(jsonPath);
   const projects = claudeJson.projects ?? {};
-  const entries: AgentTrustEntry[] = [];
-  for (const [workspacePath, project] of Object.entries(projects)) {
+  const entries: AgentTrustedDir[] = [];
+  // On-disk Claude stores key projects by absolute path.
+  for (const [projectPath, project] of Object.entries(projects)) {
     if (project.hasTrustDialogAccepted !== true) {
       continue;
     }
     entries.push({
       agent: "claude",
-      workspacePath: path.resolve(workspacePath),
+      dirPath: path.resolve(projectPath),
       detail: "hasTrustDialogAccepted",
       store: `${jsonPath}#projects`,
     });
   }
-  return entries.toSorted((a, b) => a.workspacePath.localeCompare(b.workspacePath));
+  return entries.toSorted((a, b) => a.dirPath.localeCompare(b.dirPath));
 }
 
 export function deleteClaudeTrustEntry(homeDir: string, workspacePath: string): boolean {

@@ -44,7 +44,7 @@ describe(ensureCursorTrust, () => {
       ok: true,
       status: "trusted",
       agent: "cursor",
-      workspacePath: path.resolve(workspacePath),
+      dirPath: path.resolve(workspacePath),
     });
     const markerPath = path.join(
       fakeHome,
@@ -142,7 +142,7 @@ describe(listCursorTrustEntries, () => {
     const entries = listCursorTrustEntries(fakeHome);
     expect(entries).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ agent: "cursor", workspacePath: explicitPath, detail: "trusted" }),
+        expect.objectContaining({ agent: "cursor", dirPath: explicitPath, detail: "trusted" }),
         expect.objectContaining({ agent: "cursor", detail: "manual" }),
         expect.objectContaining({ agent: "cursor", detail: "trusted (unparseable marker)" }),
       ]),

@@ -1,21 +1,28 @@
 export type {
   AgentTrustAgent,
-  AgentTrustEntry,
-  TrustResult,
-  MutationEntryResult,
-  UntrustResult,
-  PruneResult,
+  AgentTrustedDir,
+  AgentTrustDirResult,
+  AgentTrustMutationResult,
+  AgentUntrustDirResult,
+  PruneAgentTrustedDirsResult,
 } from "./types.ts";
 export { DEFAULT_TRUST_METHOD } from "./types.ts";
 export { isAgentTrustAgent, normalizeAgent } from "./normalize.ts";
-export { resolveWorkspacePath, trust, type TrustInput } from "./trust.ts";
-export { isMissingAgentTrustEntry, list, type ListInput } from "./list.ts";
-export { untrust, type UntrustInput } from "./untrust.ts";
-export { prune, type PruneInput } from "./prune.ts";
+export { resolveDirPath, agentTrustDir, type AgentTrustDirInput } from "./agentTrustDir.ts";
 export {
-  formatTrustActionResults,
-  formatTrustList,
-  shortenTrustPath,
-  type FormatTrustActionResultsOptions,
-  type FormatTrustListOptions,
+  isMissingAgentTrustedDir,
+  listAgentTrustedDirs,
+  type ListAgentTrustedDirsInput,
+} from "./listAgentTrustedDirs.ts";
+export { agentUntrustDir, type AgentUntrustDirInput } from "./agentUntrustDir.ts";
+export {
+  pruneAgentTrustedDirs,
+  type PruneAgentTrustedDirsInput,
+} from "./pruneAgentTrustedDirs.ts";
+export {
+  formatAgentTrustActionResults,
+  formatAgentTrustedDirList,
+  shortenDirPath,
+  type FormatAgentTrustActionResultsOptions,
+  type FormatAgentTrustedDirListOptions,
 } from "./format.ts";

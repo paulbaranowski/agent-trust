@@ -134,7 +134,7 @@ describe(listClaudeTrustEntries, () => {
     );
 
     expect(listClaudeTrustEntries(fakeHome)).toEqual([
-      expect.objectContaining({ agent: "claude", workspacePath: trustedPath }),
+      expect.objectContaining({ agent: "claude", dirPath: trustedPath }),
     ]);
   });
 

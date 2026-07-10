@@ -5,13 +5,18 @@ import { deleteClaudeTrustEntry } from "./agents/claude.ts";
 import { deleteCodexTrustEntry } from "./agents/codex.ts";
 import { deleteCursorTrustEntry } from "./agents/cursor.ts";
 import { resolveHomeDir } from "./agents/shared.ts";
-import { collectTrustEntries } from "./list.ts";
-import type { AgentTrustAgent, AgentTrustEntry, MutationEntryResult, UntrustResult } from "./types.ts";
+import { collectTrustEntries } from "./listAgentTrustedDirs.ts";
+import type {
+  AgentTrustAgent,
+  AgentTrustedDir,
+  AgentTrustMutationResult,
+  AgentUntrustDirResult,
+} from "./types.ts";
 
-export interface UntrustInput {
+export interface AgentUntrustDirInput {
   homeDir?: string;
   agent?: AgentTrustAgent;
-  /** Delete trust for this exact absolute workspace path. */
+  /** Delete trust for this exact absolute directory path. */
   path?: string;
   /** Delete trust for every path under this directory prefix. */
   pathPrefix?: string;
@@ -28,7 +33,7 @@ function normalizedPrefix(prefix: string): string {
   return resolved.endsWith(path.sep) ? resolved : `${resolved}${path.sep}`;
 }
 
-function matchesDeleteTarget(entry: AgentTrustEntry, input: UntrustInput): boolean {
+function matchesDeleteTarget(entry: AgentTrustedDir, input: AgentUntrustDirInput): boolean {
   if (input.agent !== undefined && entry.agent !== input.agent) {
     return false;
   }
@@ -42,24 +47,24 @@ function matchesDeleteTarget(entry: AgentTrustEntry, input: UntrustInput): boole
     return true;
   }
   if (input.path !== undefined) {
-    return path.resolve(entry.workspacePath) === path.resolve(input.path);
+    return path.resolve(entry.dirPath) === path.resolve(input.path);
   }
   if (input.pathPrefix !== undefined) {
     const prefix = normalizedPrefix(input.pathPrefix);
-    const resolved = `${path.resolve(entry.workspacePath)}${path.sep}`;
+    const resolved = `${path.resolve(entry.dirPath)}${path.sep}`;
     return resolved.startsWith(prefix);
   }
   return false;
 }
 
-function deleteTrustEntry(homeDir: string, entry: AgentTrustEntry): boolean {
+function deleteTrustEntry(homeDir: string, entry: AgentTrustedDir): boolean {
   switch (entry.agent) {
     case "cursor":
       return deleteCursorTrustEntry(entry.store);
     case "claude":
-      return deleteClaudeTrustEntry(homeDir, entry.workspacePath);
+      return deleteClaudeTrustEntry(homeDir, entry.dirPath);
     case "codex":
-      return deleteCodexTrustEntry(homeDir, entry.workspacePath);
+      return deleteCodexTrustEntry(homeDir, entry.dirPath);
     default: {
       const unsupportedAgent: never = entry.agent;
       throw new Error(`Unsupported trust agent: ${String(unsupportedAgent)}`);
@@ -68,25 +73,28 @@ function deleteTrustEntry(homeDir: string, entry: AgentTrustEntry): boolean {
 }
 
 /** Delete a single trust entry, capturing any I/O failure as a Result instead of throwing. */
-export function deleteTrustEntrySafe(homeDir: string, entry: AgentTrustEntry): MutationEntryResult {
+export function deleteTrustEntrySafe(
+  homeDir: string,
+  entry: AgentTrustedDir,
+): AgentTrustMutationResult {
   try {
     return {
       agent: entry.agent,
-      workspacePath: entry.workspacePath,
+      dirPath: entry.dirPath,
       deleted: deleteTrustEntry(homeDir, entry),
     };
   } catch (error) {
     return {
       agent: entry.agent,
-      workspacePath: entry.workspacePath,
+      dirPath: entry.dirPath,
       deleted: false,
-      error: `agent-trust: could not remove ${entry.agent} workspace trust for ${entry.workspacePath} (${String(error)})`,
+      error: `agent-trust: could not remove ${entry.agent} workspace trust for ${entry.dirPath} (${String(error)})`,
     };
   }
 }
 
-/** Delete workspace trust entries from Cursor, Claude, and/or Codex stores. */
-export function untrust(input: UntrustInput): UntrustResult {
+/** Delete directory trust entries from Cursor, Claude, and/or Codex stores. */
+export function agentUntrustDir(input: AgentUntrustDirInput): AgentUntrustDirResult {
   const hasTarget =
     input.all === true || input.path !== undefined || input.pathPrefix !== undefined;
   if (!hasTarget) {
@@ -106,7 +114,10 @@ export function untrust(input: UntrustInput): UntrustResult {
 }
 
 /** @internal Exported for branch-coverage tests. */
-export function matchesDeleteTargetForTests(entry: AgentTrustEntry, input: UntrustInput): boolean {
+export function matchesDeleteTargetForTests(
+  entry: AgentTrustedDir,
+  input: AgentUntrustDirInput,
+): boolean {
   return matchesDeleteTarget(entry, input);
 }
 
@@ -116,6 +127,6 @@ export function normalizedPrefixForTests(prefix: string): string {
 }
 
 /** @internal Exported for branch-coverage tests. */
-export function deleteTrustEntryForTests(homeDir: string, entry: AgentTrustEntry): boolean {
+export function deleteTrustEntryForTests(homeDir: string, entry: AgentTrustedDir): boolean {
   return deleteTrustEntry(homeDir, entry);
 }

@@ -1,7 +1,7 @@
 import { existsSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import path from "node:path";
 
-import type { AgentTrustEntry, TrustResult } from "../types.ts";
+import type { AgentTrustedDir, AgentTrustDirResult } from "../types.ts";
 import { isPlainObject, writeFileAtomic } from "./shared.ts";
 
 interface CursorWorkspaceTrustedMarker {
@@ -27,7 +27,7 @@ export function ensureCursorTrust(input: {
   workspacePath: string;
   homeDir: string;
   trustMethod: string;
-}): TrustResult {
+}): AgentTrustDirResult {
   const absoluteWorkspacePath = path.resolve(input.workspacePath);
   const markerPath = cursorWorkspaceTrustedPath(input.homeDir, input.workspacePath);
   if (existsSync(markerPath)) {
@@ -35,7 +35,7 @@ export function ensureCursorTrust(input: {
       ok: true,
       status: "already-trusted",
       agent: "cursor",
-      workspacePath: absoluteWorkspacePath,
+      dirPath: absoluteWorkspacePath,
     };
   }
 
@@ -53,7 +53,7 @@ export function ensureCursorTrust(input: {
       status: "error",
       error: `agent-trust: could not seed Cursor workspace trust for ${absoluteWorkspacePath} (${String(error)})`,
       agent: "cursor",
-      workspacePath: absoluteWorkspacePath,
+      dirPath: absoluteWorkspacePath,
     };
   }
 
@@ -61,7 +61,7 @@ export function ensureCursorTrust(input: {
     ok: true,
     status: "trusted",
     agent: "cursor",
-    workspacePath: absoluteWorkspacePath,
+    dirPath: absoluteWorkspacePath,
   };
 }
 
@@ -74,26 +74,27 @@ function parseCursorMarker(raw: string): CursorWorkspaceTrustedMarker | undefine
   }
 }
 
-export function listCursorTrustEntries(homeDir: string): AgentTrustEntry[] {
+export function listCursorTrustEntries(homeDir: string): AgentTrustedDir[] {
   const projectsDir = cursorProjectsDir(homeDir);
   if (!existsSync(projectsDir)) {
     return [];
   }
 
-  const entries: AgentTrustEntry[] = [];
+  const entries: AgentTrustedDir[] = [];
   for (const slug of readdirSync(projectsDir)) {
     const markerPath = path.join(projectsDir, slug, ".workspace-trusted");
     if (!existsSync(markerPath)) {
       continue;
     }
-    let workspacePath = path.resolve(`/${slug.replaceAll("-", "/")}`);
+    let dirPath = path.resolve(`/${slug.replaceAll("-", "/")}`);
     let detail = "trusted";
     const marker = parseCursorMarker(readFileSync(markerPath, "utf8"));
     if (marker === undefined) {
       detail = "trusted (unparseable marker)";
     } else {
+      // On-disk Cursor markers still store the `workspacePath` key.
       if (typeof marker.workspacePath === "string") {
-        workspacePath = marker.workspacePath;
+        dirPath = marker.workspacePath;
       }
       if (typeof marker.trustMethod === "string") {
         detail = marker.trustMethod;
@@ -101,12 +102,12 @@ export function listCursorTrustEntries(homeDir: string): AgentTrustEntry[] {
     }
     entries.push({
       agent: "cursor",
-      workspacePath: path.resolve(workspacePath),
+      dirPath: path.resolve(dirPath),
       detail,
       store: markerPath,
     });
   }
-  return entries.toSorted((a, b) => a.workspacePath.localeCompare(b.workspacePath));
+  return entries.toSorted((a, b) => a.dirPath.localeCompare(b.dirPath));
 }
 
 export function deleteCursorTrustEntry(markerPath: string): boolean {

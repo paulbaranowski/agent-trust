@@ -1,24 +1,24 @@
 import path from "node:path";
 
-import { isMissingAgentTrustEntry } from "./list.ts";
+import { isMissingAgentTrustedDir } from "./listAgentTrustedDirs.ts";
 import { failMark, okMark, styleDim, styleWarning } from "./style.ts";
-import type { AgentTrustAgent, AgentTrustEntry, MutationEntryResult } from "./types.ts";
+import type { AgentTrustAgent, AgentTrustedDir, AgentTrustMutationResult } from "./types.ts";
 
 const AGENT_ORDER: readonly AgentTrustAgent[] = ["cursor", "claude", "codex"];
 const UNPARSEABLE_CURSOR_DETAIL = "trusted (unparseable marker)";
 
-export interface FormatTrustListOptions {
+export interface FormatAgentTrustedDirListOptions {
   homeDir: string;
   missingOnly?: boolean;
 }
 
-export interface FormatTrustActionResultsOptions {
+export interface FormatAgentTrustActionResultsOptions {
   homeDir: string;
   action: "remove" | "prune";
 }
 
-export function shortenTrustPath(workspacePath: string, homeDir: string): string {
-  const resolved = path.resolve(workspacePath);
+export function shortenDirPath(dirPath: string, homeDir: string): string {
+  const resolved = path.resolve(dirPath);
   const home = path.resolve(homeDir);
   if (resolved === home) {
     return "~";
@@ -37,19 +37,19 @@ function sectionBlock(title: string, lines: readonly string[]): string[] {
   return [title, "-".repeat(title.length), ...lines, ""];
 }
 
-function formatListEntryLine(entry: AgentTrustEntry, homeDir: string): string {
-  const shortPath = shortenTrustPath(entry.workspacePath, homeDir);
+function formatListEntryLine(entry: AgentTrustedDir, homeDir: string): string {
+  const shortPath = shortenDirPath(entry.dirPath, homeDir);
   if (entry.detail === UNPARSEABLE_CURSOR_DETAIL) {
     return `  ${styleWarning("⚠")}  ${shortPath}  ${styleDim("unparseable marker")}`;
   }
-  if (isMissingAgentTrustEntry(entry)) {
+  if (isMissingAgentTrustedDir(entry)) {
     return `  ${failMark()}  ${shortPath}  ${styleDim("[missing]")}`;
   }
   return `  ${okMark()}  ${shortPath}`;
 }
 
-function countMissing(entries: readonly AgentTrustEntry[]): number {
-  return entries.filter(isMissingAgentTrustEntry).length;
+function countMissing(entries: readonly AgentTrustedDir[]): number {
+  return entries.filter(isMissingAgentTrustedDir).length;
 }
 
 function agentSectionTitle(agent: AgentTrustAgent, count: number): string {
@@ -57,9 +57,9 @@ function agentSectionTitle(agent: AgentTrustAgent, count: number): string {
   return `${label} (${String(count)})`;
 }
 
-export function formatTrustList(
-  entries: readonly AgentTrustEntry[],
-  options: FormatTrustListOptions,
+export function formatAgentTrustedDirList(
+  entries: readonly AgentTrustedDir[],
+  options: FormatAgentTrustedDirListOptions,
 ): string {
   if (entries.length === 0) {
     if (options.missingOnly === true) {
@@ -90,9 +90,9 @@ export function formatTrustList(
   return lines.join("\n").replace(/\n+$/u, "");
 }
 
-export function formatTrustActionResults(
-  results: readonly MutationEntryResult[],
-  options: FormatTrustActionResultsOptions,
+export function formatAgentTrustActionResults(
+  results: readonly AgentTrustMutationResult[],
+  options: FormatAgentTrustActionResultsOptions,
 ): string {
   if (results.length === 0) {
     return options.action === "prune"
@@ -110,7 +110,7 @@ export function formatTrustActionResults(
 
   const lines: string[] = [header, ""];
   for (const result of results) {
-    const shortPath = shortenTrustPath(result.workspacePath, options.homeDir);
+    const shortPath = shortenDirPath(result.dirPath, options.homeDir);
     const mark = result.deleted ? okMark() : failMark();
     lines.push(`  ${mark}  ${result.agent}  ${shortPath}`);
   }
