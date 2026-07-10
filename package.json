@@ -1,6 +1,6 @@
 {
   "name": "@paulbaranowski/agent-trust",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Library and CLI for Cursor, Claude, and Codex workspace trust stores",
   "license": "MIT",
   "type": "module",
@@ -8,7 +8,7 @@
     "node": ">=24"
   },
   "bin": {
-    "agent-trust": "./bin/agent-trust.js"
+    "agent-trust": "bin/agent-trust.js"
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
