@@ -43,6 +43,18 @@ function findCodexHeaderIndex(
       return { header, headerIndex };
     }
   }
+  // Alias match: symlink / pre-realpath keys that canonicalize to the same path.
+  for (const match of config.matchAll(CODEX_PROJECT_HEADER_PATTERN)) {
+    const rawPath = match[1];
+    const headerIndex = match.index;
+    if (rawPath === undefined || headerIndex === undefined) {
+      continue;
+    }
+    const parsedPath = parseCodexProjectPathKey(rawPath);
+    if (canonicalizeWorkspacePath(parsedPath) === absoluteWorkspacePath) {
+      return { header: match[0], headerIndex };
+    }
+  }
   return undefined;
 }
 

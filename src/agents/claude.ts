@@ -150,7 +150,7 @@ export function listClaudeTrustEntries(homeDir: string): AgentTrustedDir[] {
   const entries: AgentTrustedDir[] = [];
   // On-disk Claude stores key projects by absolute path.
   for (const [projectPath, project] of Object.entries(projects)) {
-    if (project.hasTrustDialogAccepted !== true) {
+    if (!isPlainObject(project) || project["hasTrustDialogAccepted"] !== true) {
       continue;
     }
     entries.push({

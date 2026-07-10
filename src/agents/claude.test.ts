@@ -220,6 +220,24 @@ describe(listClaudeTrustEntries, () => {
     writeFileSync(path.join(fakeHome, ".claude.json"), "{not-json", "utf8");
     expect(listClaudeTrustEntries(fakeHome)).toEqual([]);
   });
+
+  it("skips nullish project entries without throwing", () => {
+    const trustedPath = path.resolve(fakeHome, "trusted");
+    writeFileSync(
+      path.join(fakeHome, ".claude.json"),
+      JSON.stringify({
+        projects: {
+          [trustedPath]: { hasTrustDialogAccepted: true },
+          "/broken": null,
+        },
+      }),
+      "utf8",
+    );
+
+    expect(listClaudeTrustEntries(fakeHome)).toEqual([
+      expect.objectContaining({ agent: "claude", dirPath: trustedPath }),
+    ]);
+  });
 });
 
 describe(deleteClaudeTrustEntry, () => {

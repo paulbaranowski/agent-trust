@@ -222,11 +222,11 @@ formatAgentTrustActionResults(results, { homeDir, action: "remove" });
 
 ## On-disk stores
 
-| Agent  | Store                                                                         |
-| ------ | ----------------------------------------------------------------------------- |
-| Cursor | `~/.cursor/projects/<slug>/.workspace-trusted` (JSON; includes `trustMethod`) |
-| Claude | `~/.claude.json` → `projects.<absPath>.hasTrustDialogAccepted`                |
-| Codex  | `~/.codex/config.toml` → `[projects."<absPath>"]` + `trust_level = "trusted"` |
+| Agent  | Store                                                                                                                          |
+| ------ | ------------------------------------------------------------------------------------------------------------------------------ |
+| Cursor | `~/.cursor/projects/<slug>/.workspace-trusted` (JSON; includes `trustMethod`)                                                  |
+| Claude | `~/.claude.json` → `projects.<absPath>.hasTrustDialogAccepted`                                                                 |
+| Codex  | `$CODEX_HOME/config.toml` (or `codexHome`, else `~/.codex/config.toml`) → `[projects."<absPath>"]` + `trust_level = "trusted"` |
 
 The public API field is always `dirPath`. Cursor’s on-disk marker still uses the key
 `workspacePath` for compatibility with existing markers.

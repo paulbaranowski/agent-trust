@@ -1,4 +1,4 @@
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -78,6 +78,27 @@ describe(ensureCodexTrust, () => {
     expect(result.status).toBe("already-trusted");
     expect(readConfig()).toBe(existing);
     expect(statSync(configPath()).mtimeMs).toBe(before);
+  });
+
+  it("treats a symlink-alias header as already trusted for the realpath", () => {
+    const real = path.join(fakeHome, "real-ws");
+    const link = path.join(fakeHome, "link-ws");
+    mkdirSync(real);
+    symlinkSync(real, link);
+    const aliasHeader = codexProjectTableHeader(link);
+    mkdirSync(path.join(fakeHome, ".codex"), { recursive: true });
+    writeFileSync(configPath(), `${aliasHeader}\ntrust_level = "trusted"\n`, "utf8");
+
+    const result = ensureCodexTrust({
+      workspacePath: real,
+      homeDir: fakeHome,
+      trustMethod: "agent-trust",
+    });
+    expect(result.status).toBe("already-trusted");
+    expect(readConfig()).toBe(`${aliasHeader}\ntrust_level = "trusted"\n`);
+
+    expect(deleteCodexTrustEntry(fakeHome, real)).toBe(true);
+    expect(readConfig().trim()).toBe("");
   });
 
   it("preserves unrelated config settings", () => {

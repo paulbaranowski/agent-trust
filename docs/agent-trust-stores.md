@@ -162,7 +162,8 @@ Parses every `[projects."…"]` header. Only sections whose body has
 `trust_level = "trusted"` are listed.
 
 - `detail`: `"trust_level=trusted"`
-- `store`: `~/.codex/config.toml`
+- `store`: the resolved Codex config path (`$CODEX_HOME/config.toml`, or
+  `codexHome`, else `~/.codex/config.toml`)
 
 ### Untrust
 
