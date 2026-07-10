@@ -82,12 +82,34 @@ function findClaudeProjectKey(
   return undefined;
 }
 
+/** True for drive-letter or UNC paths that Claude may match in either slash form. */
+function looksWindowsPath(workspacePath: string): boolean {
+  return /^[A-Za-z]:[\\/]/.test(workspacePath) || workspacePath.startsWith("\\\\");
+}
+
+function claudeTrustKeysForWorkspace(workspacePath: string): string[] {
+  if (looksWindowsPath(workspacePath)) {
+    const native = workspacePath;
+    const forward = workspacePath.replace(/\\/g, "/");
+    return native === forward ? [native] : [native, forward];
+  }
+  return [canonicalizeWorkspacePath(workspacePath)];
+}
+
+function projectEntryTrusted(
+  projects: Record<string, ClaudeProjectEntry>,
+  keys: string[],
+): boolean {
+  return keys.some((key) => projects[key]?.hasTrustDialogAccepted === true);
+}
+
 export function ensureClaudeTrust(input: {
   workspacePath: string;
   homeDir: string;
   trustMethod: string;
 }): AgentTrustDirResult {
-  const absoluteWorkspacePath = canonicalizeWorkspacePath(input.workspacePath);
+  const trustKeys = claudeTrustKeysForWorkspace(input.workspacePath);
+  const absoluteWorkspacePath = trustKeys[0] ?? canonicalizeWorkspacePath(input.workspacePath);
   const jsonPath = claudeJsonPath(input.homeDir);
   const read = readClaudeJsonFile(jsonPath);
   if (!read.ok) {
@@ -101,24 +123,43 @@ export function ensureClaudeTrust(input: {
   }
   const claudeJson = read.value;
   const projects = claudeJson.projects ?? {};
-  const projectKey = findClaudeProjectKey(projects, absoluteWorkspacePath);
-  const existing = projectKey === undefined ? undefined : projects[projectKey];
 
-  if (existing?.hasTrustDialogAccepted === true) {
-    return {
-      ok: true,
-      status: "already-trusted",
-      agent: "claude",
-      dirPath: absoluteWorkspacePath,
+  // Prefer an existing alias key for POSIX paths; Windows dual-keys are explicit.
+  if (!looksWindowsPath(input.workspacePath)) {
+    const projectKey = findClaudeProjectKey(projects, absoluteWorkspacePath);
+    const existing = projectKey === undefined ? undefined : projects[projectKey];
+    if (existing?.hasTrustDialogAccepted === true) {
+      return {
+        ok: true,
+        status: "already-trusted",
+        agent: "claude",
+        dirPath: absoluteWorkspacePath,
+      };
+    }
+    const keyToWrite = projectKey ?? absoluteWorkspacePath;
+    projects[keyToWrite] = {
+      ...existing,
+      hasTrustDialogAccepted: true,
+      hasCompletedProjectOnboarding: true,
     };
+  } else {
+    if (projectEntryTrusted(projects, trustKeys)) {
+      return {
+        ok: true,
+        status: "already-trusted",
+        agent: "claude",
+        dirPath: absoluteWorkspacePath,
+      };
+    }
+    for (const key of trustKeys) {
+      const existing = projects[key];
+      projects[key] = {
+        ...existing,
+        hasTrustDialogAccepted: true,
+        hasCompletedProjectOnboarding: true,
+      };
+    }
   }
-
-  const keyToWrite = projectKey ?? absoluteWorkspacePath;
-  projects[keyToWrite] = {
-    ...existing,
-    hasTrustDialogAccepted: true,
-    hasCompletedProjectOnboarding: true,
-  };
   claudeJson.projects = projects;
 
   try {

@@ -155,6 +155,47 @@ describe(ensureClaudeTrust, () => {
     expect(projects[path.resolve(workspacePath)]?.["hasTrustDialogAccepted"]).toBe(true);
   });
 
+  it("seeds trust under native and slash-normalized Windows keys", () => {
+    const nativeKey = String.raw`C:\Users\a\proj`;
+    const slashKey = "C:/Users/a/proj";
+    writeFileSync(
+      path.join(fakeHome, ".claude.json"),
+      JSON.stringify({
+        projects: {
+          "/unrelated/posix": { hasTrustDialogAccepted: true, keep: true },
+        },
+      }),
+      "utf8",
+    );
+
+    const result = ensureClaudeTrust({
+      workspacePath: nativeKey,
+      homeDir: fakeHome,
+      trustMethod: "agent-trust",
+    });
+
+    expect(result).toMatchObject({ ok: true, status: "trusted", agent: "claude" });
+    const projects = readClaudeJson()["projects"] as Record<string, Record<string, unknown>>;
+    expect(projects[nativeKey]?.["hasTrustDialogAccepted"]).toBe(true);
+    expect(projects[slashKey]?.["hasTrustDialogAccepted"]).toBe(true);
+    expect(projects["/unrelated/posix"]).toEqual({
+      hasTrustDialogAccepted: true,
+      keep: true,
+    });
+  });
+
+  it("uses a single key for POSIX-only paths", () => {
+    const workspacePath = path.join(fakeHome, "posix-only");
+    ensureClaudeTrust({
+      workspacePath,
+      homeDir: fakeHome,
+      trustMethod: "agent-trust",
+    });
+    const projects = readClaudeJson()["projects"] as Record<string, Record<string, unknown>>;
+    const keys = Object.keys(projects);
+    expect(keys).toEqual([path.resolve(workspacePath)]);
+  });
+
   it("returns an error result when the file cannot be written", () => {
     if (typeof process.getuid === "function" && process.getuid() === 0) {
       return;
