@@ -98,19 +98,32 @@ function parseCursorMarker(raw: string): CursorWorkspaceTrustedMarker | undefine
 
 export function listCursorTrustEntries(homeDir: string): AgentTrustedDir[] {
   const projectsDir = cursorProjectsDir(homeDir);
-  if (!existsSync(projectsDir)) {
+  let slugs: string[];
+  try {
+    if (!existsSync(projectsDir)) {
+      return [];
+    }
+    slugs = readdirSync(projectsDir);
+  } catch {
+    // Match Claude/Codex list readers: degrade to [] on permission / I/O failures.
     return [];
   }
 
   const entries: AgentTrustedDir[] = [];
-  for (const slug of readdirSync(projectsDir)) {
+  for (const slug of slugs) {
     const markerPath = path.join(projectsDir, slug, ".workspace-trusted");
-    if (!existsSync(markerPath)) {
+    let raw: string;
+    try {
+      if (!existsSync(markerPath)) {
+        continue;
+      }
+      raw = readFileSync(markerPath, "utf8");
+    } catch {
       continue;
     }
     let dirPath = path.resolve(`/${slug.replaceAll("-", "/")}`);
     let detail = "trusted";
-    const marker = parseCursorMarker(readFileSync(markerPath, "utf8"));
+    const marker = parseCursorMarker(raw);
     if (marker === undefined) {
       detail = "trusted (unparseable marker)";
     } else {

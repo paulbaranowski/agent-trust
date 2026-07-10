@@ -11,17 +11,22 @@ import {
 
 describe(shortenDirPath, () => {
   it("replaces the home directory prefix with tilde", () => {
-    const home = "/Users/test";
-    expect(shortenDirPath("/Users/test/dev/repo", home)).toBe("~/dev/repo");
-    expect(shortenDirPath("/Users/test", home)).toBe("~");
+    const home = path.join(os.tmpdir(), "agent-trust-shorten-home");
+    const repo = path.join(home, "dev", "repo");
+    expect(shortenDirPath(repo, home)).toBe(`~${path.sep}dev${path.sep}repo`);
+    expect(shortenDirPath(home, home)).toBe("~");
   });
 
   it("leaves paths outside the home directory unchanged", () => {
-    expect(shortenDirPath("/tmp/ws", "/Users/test")).toBe("/tmp/ws");
+    const home = path.join(os.tmpdir(), "agent-trust-shorten-a");
+    const outside = path.join(os.tmpdir(), "agent-trust-shorten-b", "ws");
+    expect(shortenDirPath(outside, home)).toBe(path.resolve(outside));
   });
 
   it("handles home directories that already end with a separator", () => {
-    expect(shortenDirPath("/foo/bar", "/")).toBe(`~${path.sep}foo${path.sep}bar`);
+    const home = `${path.resolve(path.sep)}${path.sep}`;
+    const child = path.join(path.resolve(path.sep), "foo", "bar");
+    expect(shortenDirPath(child, home)).toBe(`~${path.sep}foo${path.sep}bar`);
   });
 });
 
@@ -121,6 +126,31 @@ describe(formatAgentTrustedDirList, () => {
     expect(formatted).not.toContain("trust_level");
   });
 
+  it("filters live paths out when missingOnly is requested", () => {
+    const missingPath = path.join(fakeHome, "gone");
+    const formatted = formatAgentTrustedDirList(
+      [
+        {
+          agent: "claude",
+          dirPath: existingPath,
+          detail: "hasTrustDialogAccepted",
+          store: `${fakeHome}/.claude.json#projects`,
+        },
+        {
+          agent: "codex",
+          dirPath: missingPath,
+          detail: "trust_level=trusted",
+          store: `${fakeHome}/.codex/config.toml`,
+        },
+      ],
+      { homeDir: fakeHome, missingOnly: true },
+    );
+
+    expect(formatted).toContain("Stale workspace trust (1 entry)");
+    expect(formatted).toContain(shortenDirPath(missingPath, fakeHome));
+    expect(formatted).not.toContain(shortenDirPath(existingPath, fakeHome));
+  });
+
   it("uses plural stale headers and omits missing counts when all paths exist", () => {
     const firstPath = path.join(fakeHome, "one");
     const secondPath = path.join(fakeHome, "two");
@@ -181,28 +211,58 @@ describe(formatAgentTrustedDirList, () => {
 });
 
 describe(formatAgentTrustActionResults, () => {
-  const fakeHome = "/Users/test";
+  let fakeHome: string;
+
+  beforeEach(() => {
+    fakeHome = mkdtempSync(path.join(os.tmpdir(), "agent-trust-format-action-"));
+  });
+
+  afterEach(() => {
+    rmSync(fakeHome, { recursive: true, force: true });
+  });
 
   it("renders prune results without trust metadata", () => {
+    const gone = path.join(fakeHome, "gone");
+    const stuck = path.join(fakeHome, "stuck");
     const formatted = formatAgentTrustActionResults(
       [
-        { agent: "claude", dirPath: "/Users/test/gone", deleted: true },
-        { agent: "cursor", dirPath: "/Users/test/stuck", deleted: false },
+        { agent: "claude", dirPath: gone, deleted: true },
+        { agent: "cursor", dirPath: stuck, deleted: false },
       ],
       { homeDir: fakeHome, action: "prune" },
     );
 
     expect(formatted).toContain("Pruned 1 stale entry");
-    expect(formatted).toContain("✓  claude  ~/gone");
-    expect(formatted).toContain("✗  cursor  ~/stuck");
+    expect(formatted).toContain(`✓  claude  ${shortenDirPath(gone, fakeHome)}`);
+    expect(formatted).toContain(`✗  cursor  ${shortenDirPath(stuck, fakeHome)}`);
     expect(formatted).toContain("Summary: 1 removed · 1 failed");
   });
 
-  it("uses plural nouns when multiple entries are removed", () => {
+  it("prints mutation errors under failed rows", () => {
+    const stuck = path.join(fakeHome, "stuck");
     const formatted = formatAgentTrustActionResults(
       [
-        { agent: "claude", dirPath: "/Users/test/one", deleted: true },
-        { agent: "codex", dirPath: "/Users/test/two", deleted: true },
+        {
+          agent: "codex",
+          dirPath: stuck,
+          deleted: false,
+          error: "agent-trust: could not remove codex workspace trust",
+        },
+      ],
+      { homeDir: fakeHome, action: "remove" },
+    );
+
+    expect(formatted).toContain(`✗  codex  ${shortenDirPath(stuck, fakeHome)}`);
+    expect(formatted).toContain("agent-trust: could not remove codex workspace trust");
+  });
+
+  it("uses plural nouns when multiple entries are removed", () => {
+    const one = path.join(fakeHome, "one");
+    const two = path.join(fakeHome, "two");
+    const formatted = formatAgentTrustActionResults(
+      [
+        { agent: "claude", dirPath: one, deleted: true },
+        { agent: "codex", dirPath: two, deleted: true },
       ],
       { homeDir: fakeHome, action: "prune" },
     );
@@ -223,8 +283,9 @@ describe(formatAgentTrustActionResults, () => {
   });
 
   it("renders remove results without a failure summary when everything succeeds", () => {
+    const gone = path.join(fakeHome, "gone");
     const formatted = formatAgentTrustActionResults(
-      [{ agent: "claude", dirPath: "/Users/test/gone", deleted: true }],
+      [{ agent: "claude", dirPath: gone, deleted: true }],
       { homeDir: fakeHome, action: "remove" },
     );
 

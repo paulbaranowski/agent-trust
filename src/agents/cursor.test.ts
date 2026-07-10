@@ -163,6 +163,17 @@ describe(listCursorTrustEntries, () => {
     expect(listCursorTrustEntries(fakeHome)).toEqual([]);
   });
 
+  it("returns [] when the projects dir is unreadable", () => {
+    if (process.getuid?.() === 0) {
+      return; // permission bits are bypassed for root
+    }
+    const projectsDir = path.join(fakeHome, ".cursor", "projects");
+    mkdirSync(projectsDir, { recursive: true });
+    chmodSync(path.join(fakeHome, ".cursor"), 0o000);
+    expect(listCursorTrustEntries(fakeHome)).toEqual([]);
+    chmodSync(path.join(fakeHome, ".cursor"), 0o700);
+  });
+
   it("lists markers, using detail from trustMethod or unparseable fallback", () => {
     const explicitPath = path.resolve(fakeHome, "explicit-path");
     mkdirSync(path.join(fakeHome, ".cursor", "projects", "fallback-slug"), { recursive: true });

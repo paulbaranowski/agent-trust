@@ -146,19 +146,24 @@ describe(ensureCodexTrust, () => {
     );
   });
 
-  it("seeds from fresh when an existing config cannot be read", () => {
+  it("returns an error when an existing config cannot be read", () => {
+    if (process.getuid?.() === 0) {
+      return; // permission bits are bypassed for root
+    }
     const workspacePath = path.join(fakeHome, "codex-unreadable");
     mkdirSync(path.join(fakeHome, ".codex"), { recursive: true });
-    writeFileSync(configPath(), "[features]\nhooks = true\n", "utf8");
+    const original = "[features]\nhooks = true\n";
+    writeFileSync(configPath(), original, "utf8");
     chmodSync(configPath(), 0o000);
 
     const result = ensureCodexTrust({ workspacePath, homeDir: fakeHome, trustMethod: "agent-trust" });
 
     chmodSync(configPath(), 0o600);
-    expect(result).toMatchObject({ ok: true, status: "trusted" });
-    expect(readConfig()).toBe(
-      `${codexProjectTableHeader(path.resolve(workspacePath))}\ntrust_level = "trusted"\n`,
-    );
+    expect(result).toMatchObject({ ok: false, status: "error", agent: "codex" });
+    if (result.ok === false) {
+      expect(result.error).toContain("agent-trust:");
+    }
+    expect(readConfig()).toBe(original);
   });
 });
 

@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 
 import type { AgentTrustedDir, AgentTrustDirResult } from "../types.ts";
@@ -68,14 +68,24 @@ function upsertCodexWorkspaceTrust(config: string, absoluteWorkspacePath: string
   return `${config.slice(0, sectionEnd)}${insertion}${config.slice(sectionEnd)}`;
 }
 
+function isEnoent(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: unknown }).code === "ENOENT"
+  );
+}
+
+/** Read Codex config; missing file is empty. Other I/O errors propagate. */
 function readCodexConfig(codexConfig: string): string {
-  if (!existsSync(codexConfig)) {
-    return "";
-  }
   try {
     return readFileSync(codexConfig, "utf8");
-  } catch {
-    return "";
+  } catch (error) {
+    if (isEnoent(error)) {
+      return "";
+    }
+    throw error;
   }
 }
 
@@ -86,7 +96,18 @@ export function ensureCodexTrust(input: {
 }): AgentTrustDirResult {
   const absoluteWorkspacePath = path.resolve(input.workspacePath);
   const codexConfig = codexConfigPath(input.homeDir);
-  const existing = readCodexConfig(codexConfig);
+  let existing: string;
+  try {
+    existing = readCodexConfig(codexConfig);
+  } catch (error) {
+    return {
+      ok: false,
+      status: "error",
+      error: `agent-trust: could not seed Codex workspace trust for ${absoluteWorkspacePath} (${String(error)})`,
+      agent: "codex",
+      dirPath: absoluteWorkspacePath,
+    };
+  }
   const updated = upsertCodexWorkspaceTrust(existing, absoluteWorkspacePath);
   if (updated === existing) {
     return {
@@ -144,7 +165,14 @@ export function listCodexTrustedProjects(
 
 export function listCodexTrustEntries(homeDir: string): AgentTrustedDir[] {
   const codexConfig = codexConfigPath(homeDir);
-  return listCodexTrustedProjects(readCodexConfig(codexConfig)).map((entry) => ({
+  let config: string;
+  try {
+    config = readCodexConfig(codexConfig);
+  } catch {
+    // Match Claude list readers: degrade to [] on permission / I/O failures.
+    return [];
+  }
+  return listCodexTrustedProjects(config).map((entry) => ({
     agent: "codex" as const,
     dirPath: entry.path,
     detail: `trust_level=${entry.trustLevel}`,

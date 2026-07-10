@@ -61,24 +61,27 @@ export function formatAgentTrustedDirList(
   entries: readonly AgentTrustedDir[],
   options: FormatAgentTrustedDirListOptions,
 ): string {
-  if (entries.length === 0) {
+  const displayedEntries =
+    options.missingOnly === true ? entries.filter(isMissingAgentTrustedDir) : entries;
+
+  if (displayedEntries.length === 0) {
     if (options.missingOnly === true) {
       return "No stale workspace trust entries.";
     }
     return "No workspace trust entries found.";
   }
 
-  const missingCount = countMissing(entries);
+  const missingCount = countMissing(displayedEntries);
   const header =
     options.missingOnly === true
-      ? `Stale workspace trust (${String(entries.length)} ${entries.length === 1 ? "entry" : "entries"})`
+      ? `Stale workspace trust (${String(displayedEntries.length)} ${displayedEntries.length === 1 ? "entry" : "entries"})`
       : missingCount > 0
-        ? `Workspace trust (${String(entries.length)} ${entries.length === 1 ? "entry" : "entries"} · ${String(missingCount)} missing)`
-        : `Workspace trust (${String(entries.length)} ${entries.length === 1 ? "entry" : "entries"})`;
+        ? `Workspace trust (${String(displayedEntries.length)} ${displayedEntries.length === 1 ? "entry" : "entries"} · ${String(missingCount)} missing)`
+        : `Workspace trust (${String(displayedEntries.length)} ${displayedEntries.length === 1 ? "entry" : "entries"})`;
 
   const lines: string[] = [header, ""];
   for (const agent of AGENT_ORDER) {
-    const agentEntries = entries.filter((entry) => entry.agent === agent);
+    const agentEntries = displayedEntries.filter((entry) => entry.agent === agent);
     lines.push(
       ...sectionBlock(
         agentSectionTitle(agent, agentEntries.length),
@@ -113,6 +116,9 @@ export function formatAgentTrustActionResults(
     const shortPath = shortenDirPath(result.dirPath, options.homeDir);
     const mark = result.deleted ? okMark() : failMark();
     lines.push(`  ${mark}  ${result.agent}  ${shortPath}`);
+    if (result.error !== undefined && result.error.length > 0) {
+      lines.push(`      ${styleDim(result.error)}`);
+    }
   }
 
   if (failed > 0) {

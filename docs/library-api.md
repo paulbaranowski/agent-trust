@@ -28,8 +28,8 @@ Records trust for a directory so the agent skips its first-run trust dialog.
 agentTrustDir({
   agent: "claude", // or "cursor" | "cursor-agent" | "codex"
   dirPath: "/path/to/dir",
-  homeDir?: string, // defaults to os.homedir()
-  trustMethod?: string, // default "agent-trust"; Cursor only persists this
+  // homeDir: "/home/me", // defaults to os.homedir()
+  // trustMethod: "agent-trust", // default; Cursor only persists this
 });
 ```
 
@@ -50,14 +50,8 @@ uniformity but do not store it.
 Deletes trust entries. You must pass one of `all`, `path`, or `pathPrefix`.
 
 ```ts
-agentUntrustDir({
-  all?: boolean,
-  path?: string, // exact absolute directory
-  pathPrefix?: string, // every path under this prefix
-  agent?: "cursor" | "claude" | "codex",
-  trustMethod?: string, // Cursor only: match marker trustMethod
-  homeDir?: string,
-});
+// Pass exactly one of all / path / pathPrefix (optional filters: agent, trustMethod, homeDir).
+agentUntrustDir({ path: "/path/to/dir" });
 // → { results: AgentTrustMutationResult[] }
 ```
 
@@ -83,9 +77,9 @@ Lists trusted directories from Cursor, Claude, and/or Codex stores.
 
 ```ts
 listAgentTrustedDirs({
-  agent?: "cursor" | "claude" | "codex",
-  homeDir?: string,
-  missingOnly?: boolean, // only paths that no longer exist on disk
+  // agent: "codex", // or "cursor" | "claude"
+  // homeDir: "/home/me",
+  // missingOnly: true, // only paths that no longer exist on disk
 });
 ```
 
@@ -104,8 +98,8 @@ Removes trust entries whose `dirPath` no longer exists on disk.
 
 ```ts
 pruneAgentTrustedDirs({
-  agent?: "cursor" | "claude" | "codex",
-  homeDir?: string,
+  // agent: "claude", // or "cursor" | "codex"
+  // homeDir: "/home/me",
 });
 // → { results: AgentTrustMutationResult[] }
 ```
@@ -182,10 +176,13 @@ shortenDirPath("/Users/dev/proj", "/Users/dev"); // "~/proj"
 Human-readable list output (same shape as `agent-trust list`).
 
 ```ts
-formatAgentTrustedDirList(listAgentTrustedDirs({ homeDir }), {
-  homeDir,
-  missingOnly?: boolean,
-});
+formatAgentTrustedDirList(
+  listAgentTrustedDirs({ homeDir, missingOnly: true }),
+  {
+    homeDir,
+    missingOnly: true,
+  },
+);
 ```
 
 ---
