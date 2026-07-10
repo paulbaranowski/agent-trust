@@ -75,6 +75,20 @@ function applyArgument(
   argv: readonly string[],
   index: number,
 ): number {
+  // Once a command is selected, a non-flag token is the `list` path, never
+  // another command. Otherwise `list prune` would re-enter the switch and run
+  // the mutating prune instead of listing a directory named `prune`.
+  if (parsed.command !== undefined && !arg.startsWith("-")) {
+    if (parsed.command === "list") {
+      if (parsed.listPath !== undefined) {
+        throw new Error(`Unexpected argument: ${arg}\n\n${USAGE}`);
+      }
+      parsed.listPath = arg;
+      return index;
+    }
+    throw new Error(`Unknown argument: ${arg}\n\n${USAGE}`);
+  }
+
   switch (arg) {
     case "list":
     case "add":
@@ -120,13 +134,6 @@ function applyArgument(
       throw new CliExitError(USAGE, 0);
     }
     default: {
-      if (!arg.startsWith("-") && parsed.command === "list") {
-        if (parsed.listPath !== undefined) {
-          throw new Error(`Unexpected argument: ${arg}\n\n${USAGE}`);
-        }
-        parsed.listPath = arg;
-        return index;
-      }
       throw new Error(`Unknown argument: ${arg}\n\n${USAGE}`);
     }
   }

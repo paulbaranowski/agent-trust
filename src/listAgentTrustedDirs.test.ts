@@ -123,7 +123,7 @@ describe(listAgentTrustedDirs, () => {
     const realDir = path.resolve(fakeHome, "real-ws");
     const linkDir = path.resolve(fakeHome, "alias-ws");
     mkdirSync(realDir, { recursive: true });
-    symlinkSync(realDir, linkDir);
+    symlinkSync(realDir, linkDir, "junction");
     writeFileSync(
       path.join(fakeHome, ".claude.json"),
       JSON.stringify({
