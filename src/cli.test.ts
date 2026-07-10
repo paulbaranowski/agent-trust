@@ -106,6 +106,9 @@ describe(main, () => {
   });
 
   it("exits 1 when add cannot write trust", () => {
+    if (typeof process.getuid === "function" && process.getuid() === 0) {
+      return;
+    }
     chmodSync(fakeHome, 0o500);
     try {
       main(["add", "--agent", "cursor", "--dir", path.join(fakeHome, "fail"), "--home", fakeHome]);
@@ -116,5 +119,15 @@ describe(main, () => {
     expect(process.stderr.write).toHaveBeenCalledWith(
       expect.stringContaining("could not seed Cursor"),
     );
+  });
+
+  it("rejects a flag value that is itself a flag", () => {
+    expect(() => main(["add", "--agent", "cursor", "--dir", "--home", fakeHome])).toThrow(
+      "--dir requires a value",
+    );
+  });
+
+  it("throws usage with exit-friendly help for --help", () => {
+    expect(() => main(["--help"])).toThrow(/Usage:/);
   });
 });

@@ -93,6 +93,9 @@ describe(ensureClaudeTrust, () => {
   });
 
   it("returns an error result when the file cannot be written", () => {
+    if (typeof process.getuid === "function" && process.getuid() === 0) {
+      return;
+    }
     const workspacePath = path.join(fakeHome, "claude-write-fail");
     chmodSync(fakeHome, 0o500);
 
@@ -200,6 +203,26 @@ describe(deleteClaudeTrustEntry, () => {
     );
 
     expect(deleteClaudeTrustEntry(fakeHome, workspacePath)).toBe(true);
+    const claudeJson = JSON.parse(readFileSync(path.join(fakeHome, ".claude.json"), "utf8")) as {
+      projects?: Record<string, unknown>;
+    };
+    expect(claudeJson.projects).toEqual({});
+  });
+
+  it("deletes entries keyed by a non-canonical path string", () => {
+    const canonical = path.resolve(fakeHome, "non-canonical");
+    const storedKey = `${canonical}${path.sep}`;
+    writeFileSync(
+      path.join(fakeHome, ".claude.json"),
+      JSON.stringify({
+        projects: {
+          [storedKey]: { hasTrustDialogAccepted: true, hasCompletedProjectOnboarding: true },
+        },
+      }),
+      "utf8",
+    );
+
+    expect(deleteClaudeTrustEntry(fakeHome, canonical)).toBe(true);
     const claudeJson = JSON.parse(readFileSync(path.join(fakeHome, ".claude.json"), "utf8")) as {
       projects?: Record<string, unknown>;
     };

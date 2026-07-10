@@ -134,7 +134,7 @@ export function listCodexTrustedProjects(
     }
     const sectionBody = codexProjectSectionBody(config, headerIndex, header.length);
     const trustMatch = /trust_level\s*=\s*"([^"]*)"/.exec(sectionBody);
-    if (trustMatch?.[1] === undefined) {
+    if (trustMatch?.[1] !== "trusted") {
       continue;
     }
     entries.push({ path: workspacePath, trustLevel: trustMatch[1] });

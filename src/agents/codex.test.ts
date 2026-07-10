@@ -187,6 +187,18 @@ describe(listCodexTrustedProjects, () => {
     );
     expect(listCodexTrustedProjects(config)).toHaveLength(2);
   });
+
+  it("skips project sections marked untrusted", () => {
+    const trustedPath = "/tmp/trusted";
+    const untrustedPath = "/tmp/untrusted";
+    const config = [
+      `${codexProjectTableHeader(trustedPath)}\ntrust_level = "trusted"\n`,
+      `${codexProjectTableHeader(untrustedPath)}\ntrust_level = "untrusted"\n`,
+    ].join("\n");
+    expect(listCodexTrustedProjects(config)).toEqual([
+      { path: trustedPath, trustLevel: "trusted" },
+    ]);
+  });
 });
 
 describe(listCodexTrustEntries, () => {

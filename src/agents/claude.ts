@@ -108,11 +108,31 @@ export function listClaudeTrustEntries(homeDir: string): AgentTrustedDir[] {
   return entries.toSorted((a, b) => a.dirPath.localeCompare(b.dirPath));
 }
 
+function findClaudeProjectKey(
+  projects: Record<string, ClaudeProjectEntry>,
+  workspacePath: string,
+): string | undefined {
+  const resolved = path.resolve(workspacePath);
+  if (Object.hasOwn(projects, workspacePath)) {
+    return workspacePath;
+  }
+  for (const key of Object.keys(projects)) {
+    if (path.resolve(key) === resolved) {
+      return key;
+    }
+  }
+  return undefined;
+}
+
 export function deleteClaudeTrustEntry(homeDir: string, workspacePath: string): boolean {
   const jsonPath = claudeJsonPath(homeDir);
   const claudeJson = readClaudeJsonFile(jsonPath);
   const projects = claudeJson.projects ?? {};
-  const existing = projects[workspacePath];
+  const projectKey = findClaudeProjectKey(projects, workspacePath);
+  if (projectKey === undefined) {
+    return false;
+  }
+  const existing = projects[projectKey];
   if (existing?.hasTrustDialogAccepted !== true) {
     return false;
   }
@@ -123,10 +143,10 @@ export function deleteClaudeTrustEntry(homeDir: string, workspacePath: string): 
     ...rest
   } = existing;
   if (Object.keys(rest).length === 0) {
-    const { [workspacePath]: _removed, ...remainingProjects } = projects;
+    const { [projectKey]: _removed, ...remainingProjects } = projects;
     claudeJson.projects = remainingProjects;
   } else {
-    projects[workspacePath] = rest;
+    projects[projectKey] = rest;
     claudeJson.projects = projects;
   }
   writeClaudeJsonFile(jsonPath, claudeJson);

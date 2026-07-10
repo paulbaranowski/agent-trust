@@ -13,6 +13,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
   cursorProjectSlug,
+  cursorProjectSlugFromResolved,
   deleteCursorTrustEntry,
   ensureCursorTrust,
   listCursorTrustEntries,
@@ -21,6 +22,12 @@ import {
 describe(cursorProjectSlug, () => {
   it("strips the leading slash and replaces path separators with dashes", () => {
     expect(cursorProjectSlug("/Users/dev/repo/worktree")).toBe("Users-dev-repo-worktree");
+  });
+});
+
+describe(cursorProjectSlugFromResolved, () => {
+  it("normalizes Windows-style separators and drive letters", () => {
+    expect(cursorProjectSlugFromResolved(String.raw`C:\Users\dev\repo`)).toBe("Users-dev-repo");
   });
 });
 
@@ -82,6 +89,9 @@ describe(ensureCursorTrust, () => {
   });
 
   it("returns an error result when the marker cannot be written", () => {
+    if (typeof process.getuid === "function" && process.getuid() === 0) {
+      return;
+    }
     const workspacePath = path.join(fakeHome, "cursor-write-fail");
     mkdirSync(path.join(fakeHome, ".cursor", "projects"), { recursive: true });
     chmodSync(path.join(fakeHome, ".cursor", "projects"), 0o500);

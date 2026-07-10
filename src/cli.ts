@@ -29,6 +29,14 @@ Examples:
   agent-trust remove --all --agent cursor --trust-method groundcrew-auto-trust
   agent-trust prune`;
 
+class CliExitError extends Error {
+  readonly exitCode: number;
+
+  constructor(message: string, exitCode: number) {
+    super(message);
+    this.exitCode = exitCode;
+  }
+}
 interface ParsedArguments {
   command?: "list" | "add" | "remove" | "prune";
   agent?: AgentTrustAgent;
@@ -50,7 +58,7 @@ function parseAgent(value: string): AgentTrustAgent {
 
 function readFlagValue(argv: readonly string[], index: number, flag: string): string {
   const value = argv[index + 1];
-  if (value === undefined) {
+  if (value === undefined || value.startsWith("-")) {
     throw new Error(`${flag} requires a value`);
   }
   return value;
@@ -104,7 +112,7 @@ function applyArgument(
     }
     case "--help":
     case "-h": {
-      throw new Error(USAGE);
+      throw new CliExitError(USAGE, 0);
     }
     default: {
       throw new Error(`Unknown argument: ${arg}\n\n${USAGE}`);
@@ -128,7 +136,7 @@ function parseArguments(argv: readonly string[]): ParsedArguments {
   }
 
   if (parsed.command === undefined) {
-    throw new Error(USAGE);
+    throw new CliExitError(USAGE, 1);
   }
   return parsed;
 }
@@ -229,6 +237,6 @@ if (isDirectRun) {
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     process.stderr.write(`${message}\n`);
-    process.exitCode = 1;
+    process.exitCode = error instanceof CliExitError ? error.exitCode : 1;
   }
 }

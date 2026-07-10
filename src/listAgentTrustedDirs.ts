@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { accessSync, constants } from "node:fs";
 import { homedir } from "node:os";
 
 import { listClaudeTrustEntries } from "./agents/claude.ts";
@@ -16,17 +16,24 @@ export interface ListAgentTrustedDirsInput {
   readHome?: () => string;
 }
 
-function dirPathExists(dirPath: string): boolean {
+/** True only when the path is confirmed absent (ENOENT). Other I/O errors are not "missing". */
+function isAbsentDirPath(dirPath: string): boolean {
   try {
-    return existsSync(dirPath);
-  } catch {
+    accessSync(dirPath, constants.F_OK);
     return false;
+  } catch (error) {
+    return (
+      typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      (error as { code?: unknown }).code === "ENOENT"
+    );
   }
 }
 
 /** Whether the trusted directory path no longer exists on disk. */
 export function isMissingAgentTrustedDir(entry: AgentTrustedDir): boolean {
-  return !dirPathExists(entry.dirPath);
+  return isAbsentDirPath(entry.dirPath);
 }
 
 /** Collect trusted dirs for a resolved home directory. Internal helper for list/untrust/prune. */

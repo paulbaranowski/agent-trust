@@ -9,9 +9,18 @@ interface CursorWorkspaceTrustedMarker {
   trustMethod?: string;
 }
 
+/** Normalize a resolved absolute path into Cursor's project slug. */
+export function cursorProjectSlugFromResolved(resolvedPath: string): string {
+  return resolvedPath
+    .replaceAll("\\", "/")
+    .replace(/^[A-Za-z]:/, "")
+    .replace(/^\//, "")
+    .replaceAll("/", "-");
+}
+
 /** Cursor keys project metadata under `~/.cursor/projects/<slug>/`. */
 export function cursorProjectSlug(workspacePath: string): string {
-  return path.resolve(workspacePath).replace(/^\//, "").replaceAll("/", "-");
+  return cursorProjectSlugFromResolved(path.resolve(workspacePath));
 }
 
 function cursorProjectsDir(homeDir: string): string {

@@ -106,9 +106,10 @@ export function agentUntrustDir(input: AgentUntrustDirInput): AgentUntrustDirRes
     return { results: [] };
   }
 
-  const targets = collectTrustEntries({ homeDir: home }).filter((entry) =>
-    matchesDeleteTarget(entry, input),
-  );
+  const targets = collectTrustEntries({
+    homeDir: home,
+    ...(input.agent === undefined ? {} : { agent: input.agent }),
+  }).filter((entry) => matchesDeleteTarget(entry, input));
 
   return { results: targets.map((entry) => deleteTrustEntrySafe(home, entry)) };
 }
