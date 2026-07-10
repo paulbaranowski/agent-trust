@@ -9,18 +9,25 @@ interface CursorWorkspaceTrustedMarker {
   trustMethod?: string;
 }
 
-/** Normalize a resolved absolute path into Cursor's project slug. */
+/** True for drive-letter or UNC paths that must not go through POSIX resolve. */
+function looksWindowsPath(workspacePath: string): boolean {
+  return /^[A-Za-z]:[\\/]/.test(workspacePath) || workspacePath.startsWith("\\\\");
+}
+
+/** Normalize a resolved absolute path into Cursor's project slug (Orca-compatible). */
 export function cursorProjectSlugFromResolved(resolvedPath: string): string {
-  return resolvedPath
-    .replaceAll("\\", "/")
-    .replace(/^[A-Za-z]:/, "")
-    .replace(/^\//, "")
-    .replaceAll("/", "-");
+  const stripped = resolvedPath.replace(/^[\\/]+/, "");
+  return stripped.replace(/[\\/:*?"<>|]+/g, "-");
 }
 
 /** Cursor keys project metadata under `~/.cursor/projects/<slug>/`. */
 export function cursorProjectSlug(workspacePath: string): string {
-  return cursorProjectSlugFromResolved(canonicalizeWorkspacePath(workspacePath));
+  // Windows-looking strings are slugified as-is so unit tests and cross-OS
+  // callers are not mangled by POSIX path.resolve.
+  const abs = looksWindowsPath(workspacePath)
+    ? workspacePath
+    : canonicalizeWorkspacePath(workspacePath);
+  return cursorProjectSlugFromResolved(abs);
 }
 
 function cursorProjectsDir(homeDir: string): string {

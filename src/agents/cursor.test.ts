@@ -23,11 +23,19 @@ describe(cursorProjectSlug, () => {
   it("strips the leading slash and replaces path separators with dashes", () => {
     expect(cursorProjectSlug("/Users/dev/repo/worktree")).toBe("Users-dev-repo-worktree");
   });
+
+  it("replaces Windows-illegal path characters in the slug", () => {
+    expect(cursorProjectSlug(String.raw`C:\Users\dev\repo`)).toBe("C-Users-dev-repo");
+  });
+
+  it("still maps POSIX paths like groundcrew", () => {
+    expect(cursorProjectSlug("/Users/dev/repo/worktree")).toBe("Users-dev-repo-worktree");
+  });
 });
 
 describe(cursorProjectSlugFromResolved, () => {
   it("normalizes Windows-style separators and drive letters", () => {
-    expect(cursorProjectSlugFromResolved(String.raw`C:\Users\dev\repo`)).toBe("Users-dev-repo");
+    expect(cursorProjectSlugFromResolved(String.raw`C:\Users\dev\repo`)).toBe("C-Users-dev-repo");
   });
 });
 
