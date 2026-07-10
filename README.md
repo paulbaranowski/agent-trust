@@ -1,8 +1,10 @@
 # @paulbaranowski/agent-trust
 
-Library and CLI for managing Cursor, Claude, and Codex workspace trust stores.
+Library and CLI for managing Cursor, Claude, and Codex directory trust stores.
 
 Zero runtime dependencies. Requires Node `>=24`. MIT licensed.
+
+**Supported agents:** Cursor (`cursor` / `cursor-agent`), Claude (`claude`), Codex (`codex`).
 
 ## Install
 
@@ -44,16 +46,8 @@ if (!result.ok) {
   marker; Claude and Codex accept the parameter for API uniformity but do not
   store it. Groundcrew callers should pass `"groundcrew-auto-trust"`.
 
-Other exports: `listAgentTrustedDirs`, `agentUntrustDir`,
-`pruneAgentTrustedDirs`, `isMissingAgentTrustedDir`, `normalizeAgent`,
-`isAgentTrustAgent`, `resolveDirPath`, the format helpers
-(`formatAgentTrustedDirList`, `formatAgentTrustActionResults`, `shortenDirPath`),
-and all types (`AgentTrustDirResult`, `AgentTrustedDir`,
-`AgentTrustMutationResult`, `AgentUntrustDirResult`,
-`PruneAgentTrustedDirsResult`, `DEFAULT_TRUST_METHOD`).
-
-`agentUntrustDir()` and `pruneAgentTrustedDirs()` return
-`{ results: AgentTrustMutationResult[] }`.
+Full reference for every export (mutations, helpers, formatters, and types):
+**[Library API](docs/library-api.md)**.
 
 ## CLI
 
@@ -67,7 +61,7 @@ agent-trust prune [--agent cursor|claude|codex] [--home <dir>]
 
 ### `list`
 
-Shows trusted workspaces recorded for Cursor, Claude, and Codex. Paths under
+Shows trusted directories recorded for Cursor, Claude, and Codex. Paths under
 your home directory are shortened with `~`. Missing paths (directory gone from
 disk) are marked. Use `--agent` to limit to one agent, or `--missing` to show
 only stale entries.
@@ -80,7 +74,7 @@ agent-trust list --missing
 
 ### `add`
 
-Records trust for a workspace so the agent skips its first-run trust dialog.
+Records trust for a directory so the agent skips its first-run trust dialog.
 `--agent` is required (`cursor`, `claude`, or `codex`). `--dir` defaults to the
 current working directory. Cursor markers store `--trust-method` (default
 `agent-trust`); pass a custom value when you need to filter those markers later.
@@ -106,7 +100,7 @@ agent-trust remove --all --agent cursor --trust-method groundcrew-auto-trust
 
 ### `prune`
 
-Removes trust entries whose workspace path no longer exists on disk. Same as
+Removes trust entries whose directory path no longer exists on disk. Same as
 `list --missing` followed by deleting those entries. Optionally limit with
 `--agent`.
 
