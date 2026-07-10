@@ -31,6 +31,8 @@ const result = agentTrustDir({
   dirPath: process.cwd(),
   // trustMethod defaults to "agent-trust"; Cursor markers record it.
   trustMethod: "groundcrew-auto-trust",
+  // Optional: override Codex config dir (else CODEX_HOME, else ~/.codex).
+  // codexHome: "/custom/codex",
 });
 
 if (!result.ok) {
@@ -48,6 +50,9 @@ if (!result.ok) {
 
 Full reference for every export (mutations, helpers, formatters, and types):
 **[Library API](docs/library-api.md)**.
+
+How each agent records trust on disk (Cursor markers, Claude `~/.claude.json`,
+Codex `config.toml`): **[Agent trust-dir markings](docs/agent-trust-stores.md)**.
 
 ## CLI
 
@@ -108,6 +113,28 @@ Removes trust entries whose directory path no longer exists on disk. Same as
 agent-trust prune
 agent-trust prune --agent codex
 ```
+
+## Path semantics and concurrency
+
+- **Canonicalization:** Workspace paths are `realpath`'d when they exist (so
+  symlink aliases and `/tmp` vs `/private/tmp` share one trust key). Missing
+  paths fall back to `path.resolve`.
+- **Cursor slug:** Project directory names under `~/.cursor/projects/` strip
+  leading separators and replace Windows-illegal characters (`\ / : * ? " < > |`)
+  with `-` (Orca-compatible). Drive letters are kept (`C:\Users\…` →
+  `C-Users-…`).
+- **Codex:** Config lives under `CODEX_HOME` when set (or an explicit
+  `codexHome` library option), otherwise `~/.codex`. Project table headers use
+  `JSON.stringify` for escaping; Windows-looking paths store `/` instead of `\`
+  so TOML does not treat `\U` as a unicode escape.
+- **Claude:** Corrupt or non-object `~/.claude.json` (or an invalid `projects`
+  field) returns an error result and is **not** overwritten. On Windows-looking
+  paths, trust flags are written under both the native and forward-slash keys
+  because Claude matches the cwd string form.
+- **Concurrency:** Shared JSON/TOML stores use read-merge-write. Concurrent
+  `agentTrustDir()` calls from multiple processes can race. Cross-process
+  locking (emdash in-process lock / whip `flock`) is out of scope for this
+  release.
 
 ## License
 
