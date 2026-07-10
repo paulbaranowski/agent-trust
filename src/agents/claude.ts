@@ -15,26 +15,51 @@ interface ClaudeJsonFile {
   [key: string]: unknown;
 }
 
+type ClaudeJsonReadResult =
+  | { ok: true; value: ClaudeJsonFile; missing: boolean }
+  | { ok: false; error: string };
+
 function claudeJsonPath(homeDir: string): string {
   return path.join(homeDir, ".claude.json");
 }
 
-/** Read `~/.claude.json`, recovering silently from malformed roots / projects fields. */
-function readClaudeJsonFile(jsonPath: string): ClaudeJsonFile {
-  try {
-    const parsed: unknown = JSON.parse(readFileSync(jsonPath, "utf8"));
-    if (!isPlainObject(parsed)) {
-      return {};
-    }
-    const projects = parsed["projects"];
-    if (projects !== undefined && !isPlainObject(projects)) {
-      const { projects: _ignored, ...rest } = parsed;
-      return rest;
-    }
-    return parsed;
-  } catch {
-    return {};
+/** Read `~/.claude.json`; refuse corrupt / non-object roots and invalid `projects`. */
+function readClaudeJsonFile(jsonPath: string): ClaudeJsonReadResult {
+  if (!existsSync(jsonPath)) {
+    return { ok: true, value: {}, missing: true };
   }
+  let raw: string;
+  try {
+    raw = readFileSync(jsonPath, "utf8");
+  } catch (error) {
+    return {
+      ok: false,
+      error: `agent-trust: could not read Claude trust config (${String(error)})`,
+    };
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (error) {
+    return {
+      ok: false,
+      error: `agent-trust: corrupt Claude trust config at ${jsonPath} (${String(error)})`,
+    };
+  }
+  if (!isPlainObject(parsed)) {
+    return {
+      ok: false,
+      error: `agent-trust: Claude trust config at ${jsonPath} must be a JSON object`,
+    };
+  }
+  const projects = parsed["projects"];
+  if (projects !== undefined && !isPlainObject(projects)) {
+    return {
+      ok: false,
+      error: `agent-trust: Claude trust config at ${jsonPath} has invalid projects field`,
+    };
+  }
+  return { ok: true, value: parsed, missing: false };
 }
 
 function writeClaudeJsonFile(jsonPath: string, contents: ClaudeJsonFile): void {
@@ -64,7 +89,17 @@ export function ensureClaudeTrust(input: {
 }): AgentTrustDirResult {
   const absoluteWorkspacePath = canonicalizeWorkspacePath(input.workspacePath);
   const jsonPath = claudeJsonPath(input.homeDir);
-  const claudeJson = readClaudeJsonFile(jsonPath);
+  const read = readClaudeJsonFile(jsonPath);
+  if (!read.ok) {
+    return {
+      ok: false,
+      status: "error",
+      error: read.error,
+      agent: "claude",
+      dirPath: absoluteWorkspacePath,
+    };
+  }
+  const claudeJson = read.value;
   const projects = claudeJson.projects ?? {};
   const projectKey = findClaudeProjectKey(projects, absoluteWorkspacePath);
   const existing = projectKey === undefined ? undefined : projects[projectKey];
@@ -108,8 +143,11 @@ export function ensureClaudeTrust(input: {
 
 export function listClaudeTrustEntries(homeDir: string): AgentTrustedDir[] {
   const jsonPath = claudeJsonPath(homeDir);
-  const claudeJson = readClaudeJsonFile(jsonPath);
-  const projects = claudeJson.projects ?? {};
+  const read = readClaudeJsonFile(jsonPath);
+  if (!read.ok) {
+    return [];
+  }
+  const projects = read.value.projects ?? {};
   const entries: AgentTrustedDir[] = [];
   // On-disk Claude stores key projects by absolute path.
   for (const [projectPath, project] of Object.entries(projects)) {
@@ -128,7 +166,11 @@ export function listClaudeTrustEntries(homeDir: string): AgentTrustedDir[] {
 
 export function deleteClaudeTrustEntry(homeDir: string, workspacePath: string): boolean {
   const jsonPath = claudeJsonPath(homeDir);
-  const claudeJson = readClaudeJsonFile(jsonPath);
+  const read = readClaudeJsonFile(jsonPath);
+  if (!read.ok) {
+    return false;
+  }
+  const claudeJson = read.value;
   const projects = claudeJson.projects ?? {};
   const projectKey = findClaudeProjectKey(projects, workspacePath);
   if (projectKey === undefined) {
