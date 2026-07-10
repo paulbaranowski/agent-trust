@@ -2,12 +2,7 @@ import { existsSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import path from "node:path";
 
 import type { AgentTrustedDir, AgentTrustDirResult } from "../types.ts";
-import {
-  isPlainObject,
-  looksWindowsPath,
-  resolveWorkspaceTrustPath,
-  writeFileAtomic,
-} from "./shared.ts";
+import { canonicalizeWorkspacePath, isPlainObject, writeFileAtomic } from "./shared.ts";
 
 interface CursorWorkspaceTrustedMarker {
   workspacePath?: string;
@@ -22,13 +17,7 @@ export function cursorProjectSlugFromResolved(resolvedPath: string): string {
 
 /** Cursor keys project metadata under `~/.cursor/projects/<slug>/`. */
 export function cursorProjectSlug(workspacePath: string): string {
-  return cursorProjectSlugFromResolved(resolveWorkspaceTrustPath(workspacePath));
-}
-
-/** Identity for already-trusted compares — Windows slash forms must match. */
-function cursorWorkspaceIdentity(workspacePath: string): string {
-  const resolved = resolveWorkspaceTrustPath(workspacePath);
-  return looksWindowsPath(resolved) ? resolved.replace(/\\/g, "/") : resolved;
+  return cursorProjectSlugFromResolved(canonicalizeWorkspacePath(workspacePath));
 }
 
 function cursorProjectsDir(homeDir: string): string {
@@ -45,7 +34,7 @@ export function ensureCursorTrust(input: {
   homeDir: string;
   trustMethod: string;
 }): AgentTrustDirResult {
-  const absoluteWorkspacePath = cursorWorkspaceIdentity(input.workspacePath);
+  const absoluteWorkspacePath = canonicalizeWorkspacePath(input.workspacePath);
   const markerPath = cursorWorkspaceTrustedPath(input.homeDir, input.workspacePath);
   if (existsSync(markerPath)) {
     let existing: CursorWorkspaceTrustedMarker | undefined;
@@ -57,7 +46,7 @@ export function ensureCursorTrust(input: {
     const recordedPath = existing?.workspacePath;
     if (
       recordedPath === undefined ||
-      cursorWorkspaceIdentity(recordedPath) === absoluteWorkspacePath
+      canonicalizeWorkspacePath(recordedPath) === absoluteWorkspacePath
     ) {
       return {
         ok: true,
@@ -145,8 +134,7 @@ export function listCursorTrustEntries(homeDir: string): AgentTrustedDir[] {
     }
     entries.push({
       agent: "cursor",
-      // Preserve Windows drive/UNC identity; do not POSIX-resolve those strings.
-      dirPath: cursorWorkspaceIdentity(dirPath),
+      dirPath: canonicalizeWorkspacePath(dirPath),
       detail,
       store: markerPath,
     });

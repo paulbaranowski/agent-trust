@@ -20,12 +20,9 @@ Cursor does not key by absolute path. It derives a **project slug** from the
 workspace path (realpath when the path exists):
 
 1. Strip leading `/` or `\`
-2. Replace runs of Windows-illegal characters (`\ / : * ? " < > |`) with `-`
+2. Replace runs of unsafe characters (`\ / : * ? " < > |`) with `-`
 
-Examples:
-
-- `/Users/dev/repo/worktree` → `Users-dev-repo-worktree`
-- `C:\Users\dev\repo` → `C-Users-dev-repo`
+Example: `/Users/dev/repo/worktree` → `Users-dev-repo-worktree`
 
 Marker path:
 
@@ -86,10 +83,6 @@ Projects are keyed by absolute path under the top-level `projects` object.
 Lookup prefers an exact key match, then any key that resolves to the same path
 (via realpath when present).
 
-On Windows-looking paths (`C:\…` or UNC), trust flags are written under **both**
-the native and forward-slash forms (`C:\Users\a\proj` and `C:/Users/a/proj`)
-because Claude matches the cwd string form.
-
 ### Trust fields
 
 When trusting, Claude sets (or merges into) the project entry:
@@ -146,8 +139,7 @@ Optional library `codexHome` overrides `CODEX_HOME` / the default.
 ### Project section
 
 Codex records per-workspace trust as a TOML table whose header embeds the
-absolute path via `JSON.stringify` (Windows-looking paths normalize `\` → `/`
-first so TOML does not treat `\U` as a unicode escape):
+absolute path via `JSON.stringify`:
 
 ```toml
 [projects."/Users/dev/repo/worktree"]

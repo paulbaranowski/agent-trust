@@ -24,18 +24,14 @@ describe(cursorProjectSlug, () => {
     expect(cursorProjectSlug("/Users/dev/repo/worktree")).toBe("Users-dev-repo-worktree");
   });
 
-  it("replaces Windows-illegal path characters in the slug", () => {
-    expect(cursorProjectSlug(String.raw`C:\Users\dev\repo`)).toBe("C-Users-dev-repo");
-  });
-
-  it("still maps POSIX paths like groundcrew", () => {
-    expect(cursorProjectSlug("/Users/dev/repo/worktree")).toBe("Users-dev-repo-worktree");
+  it("replaces unsafe path characters in the slug", () => {
+    expect(cursorProjectSlug('/Users/dev/repo:name*"weird')).toBe("Users-dev-repo-name-weird");
   });
 });
 
 describe(cursorProjectSlugFromResolved, () => {
-  it("normalizes Windows-style separators and drive letters", () => {
-    expect(cursorProjectSlugFromResolved(String.raw`C:\Users\dev\repo`)).toBe("C-Users-dev-repo");
+  it("strips a leading separator before slugifying", () => {
+    expect(cursorProjectSlugFromResolved("/Users/dev/repo")).toBe("Users-dev-repo");
   });
 });
 
@@ -94,35 +90,6 @@ describe(ensureCursorTrust, () => {
     });
     expect(result.status).toBe("already-trusted");
     expect(readFileSync(markerPath, "utf8")).toBe('{"trustMethod":"existing"}\n');
-  });
-
-  it("treats Windows slash variants as the same already-trusted path", () => {
-    const nativePath = String.raw`C:\Users\dev\repo`;
-    const slashPath = "C:/Users/dev/repo";
-    expect(cursorProjectSlug(nativePath)).toBe(cursorProjectSlug(slashPath));
-
-    const first = ensureCursorTrust({
-      workspacePath: nativePath,
-      homeDir: fakeHome,
-      trustMethod: "agent-trust",
-    });
-    expect(first.status).toBe("trusted");
-
-    const markerPath = path.join(
-      fakeHome,
-      ".cursor",
-      "projects",
-      cursorProjectSlug(nativePath),
-      ".workspace-trusted",
-    );
-    const before = readFileSync(markerPath, "utf8");
-    const second = ensureCursorTrust({
-      workspacePath: slashPath,
-      homeDir: fakeHome,
-      trustMethod: "other-method",
-    });
-    expect(second.status).toBe("already-trusted");
-    expect(readFileSync(markerPath, "utf8")).toBe(before);
   });
 
   it("rewrites a slug-colliding marker when the recorded path differs", () => {
@@ -242,26 +209,6 @@ describe(listCursorTrustEntries, () => {
       ]),
     );
     expect(entries).toHaveLength(3);
-  });
-
-  it("preserves slash-normalized Windows workspacePath without POSIX resolve", () => {
-    const windowsPath = "C:/Users/dev/repo";
-    const slug = cursorProjectSlug(windowsPath);
-    mkdirSync(path.join(fakeHome, ".cursor", "projects", slug), { recursive: true });
-    writeFileSync(
-      path.join(fakeHome, ".cursor", "projects", slug, ".workspace-trusted"),
-      `${JSON.stringify({ workspacePath: windowsPath, trustMethod: "agent-trust" })}\n`,
-      "utf8",
-    );
-
-    expect(listCursorTrustEntries(fakeHome)).toEqual([
-      {
-        agent: "cursor",
-        dirPath: windowsPath,
-        detail: "agent-trust",
-        store: path.join(fakeHome, ".cursor", "projects", slug, ".workspace-trusted"),
-      },
-    ]);
   });
 });
 

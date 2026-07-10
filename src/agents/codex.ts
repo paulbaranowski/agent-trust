@@ -5,7 +5,6 @@ import type { AgentTrustedDir, AgentTrustDirResult } from "../types.ts";
 import {
   canonicalizeWorkspacePath,
   resolveCodexHome,
-  resolveWorkspaceTrustPath,
   writeFileAtomic,
 } from "./shared.ts";
 
@@ -15,20 +14,9 @@ const CODEX_TRUST_LEVEL = "trusted";
 /** Match `[projects.<json-string>]` headers written via JSON.stringify. */
 const CODEX_PROJECT_HEADER_PATTERN = /\[projects\.("(?:[^"\\]|\\.)*")\]/g;
 
-/** Windows drive or UNC → forward slashes for TOML basic-string safety (Chorus). */
-export function normalizeCodexProjectPath(absoluteWorkspacePath: string): string {
-  if (
-    /^[A-Za-z]:[\\/]/.test(absoluteWorkspacePath) ||
-    absoluteWorkspacePath.startsWith("\\\\")
-  ) {
-    return absoluteWorkspacePath.replace(/\\/g, "/");
-  }
-  return absoluteWorkspacePath;
-}
-
 /** Codex keys per-workspace trust under `[projects.<json-path>]` in `config.toml`. */
 export function codexProjectTableHeader(absoluteWorkspacePath: string): string {
-  return `[projects.${JSON.stringify(normalizeCodexProjectPath(absoluteWorkspacePath))}]`;
+  return `[projects.${JSON.stringify(absoluteWorkspacePath)}]`;
 }
 
 /** Pre-0.2.0 header shape: TOML-escaped double-quoted path (kept for read/delete compat). */
@@ -39,20 +27,10 @@ function legacyCodexProjectTableHeader(absoluteWorkspacePath: string): string {
 
 /** Modern + legacy headers that may identify the same workspace on disk. */
 function codexHeadersForWorkspace(absoluteWorkspacePath: string): string[] {
-  const headers = new Set<string>([codexProjectTableHeader(absoluteWorkspacePath)]);
-  headers.add(legacyCodexProjectTableHeader(absoluteWorkspacePath));
-  const normalized = normalizeCodexProjectPath(absoluteWorkspacePath);
-  if (normalized !== absoluteWorkspacePath) {
-    headers.add(legacyCodexProjectTableHeader(normalized));
-  }
-  // Legacy Windows writers stored backslash form before slash normalization.
-  if (normalized.includes("/")) {
-    const withBackslashes = normalized.replace(/\//g, "\\");
-    if (/^[A-Za-z]:\\/.test(withBackslashes) || withBackslashes.startsWith("\\\\")) {
-      headers.add(legacyCodexProjectTableHeader(withBackslashes));
-    }
-  }
-  return [...headers];
+  return [
+    codexProjectTableHeader(absoluteWorkspacePath),
+    legacyCodexProjectTableHeader(absoluteWorkspacePath),
+  ];
 }
 
 function findCodexHeaderIndex(
@@ -156,7 +134,7 @@ export function ensureCodexTrust(input: {
   codexHome?: string;
   env?: NodeJS.ProcessEnv;
 }): AgentTrustDirResult {
-  const absoluteWorkspacePath = resolveWorkspaceTrustPath(input.workspacePath);
+  const absoluteWorkspacePath = canonicalizeWorkspacePath(input.workspacePath);
   const codexConfig = codexConfigPath(input.homeDir, input.codexHome, input.env);
   let existing: string;
   try {
@@ -209,10 +187,7 @@ export function listCodexTrustedProjects(
     if (rawPath === undefined) {
       continue;
     }
-    const parsedPath = parseCodexProjectPathKey(rawPath);
-    const workspacePath = /^[A-Za-z]:[\\/]/.test(parsedPath) || parsedPath.startsWith("\\\\")
-      ? parsedPath.replace(/\\/g, "/")
-      : canonicalizeWorkspacePath(parsedPath);
+    const workspacePath = canonicalizeWorkspacePath(parseCodexProjectPathKey(rawPath));
     const header = match[0];
     const headerIndex = match.index;
     if (headerIndex === undefined) {
@@ -279,10 +254,7 @@ export function deleteCodexTrustEntry(
 ): boolean {
   const codexConfig = codexConfigPath(homeDir, options.codexHome, options.env);
   const existing = readCodexConfig(codexConfig);
-  const updated = removeCodexProjectTrust(
-    existing,
-    resolveWorkspaceTrustPath(workspacePath),
-  );
+  const updated = removeCodexProjectTrust(existing, canonicalizeWorkspacePath(workspacePath));
   if (updated !== existing) {
     writeFileAtomic(codexConfig, updated);
   }

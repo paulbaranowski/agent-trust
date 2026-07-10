@@ -120,17 +120,13 @@ agent-trust prune --agent codex
   symlink aliases and `/tmp` vs `/private/tmp` share one trust key). Missing
   paths fall back to `path.resolve`.
 - **Cursor slug:** Project directory names under `~/.cursor/projects/` strip
-  leading separators and replace Windows-illegal characters (`\ / : * ? " < > |`)
-  with `-` (Orca-compatible). Drive letters are kept (`C:\Users\…` →
-  `C-Users-…`).
+  leading separators and replace unsafe characters (`\ / : * ? " < > |`) with
+  `-` (Orca-compatible).
 - **Codex:** Config lives under `CODEX_HOME` when set (or an explicit
   `codexHome` library option), otherwise `~/.codex`. Project table headers use
-  `JSON.stringify` for escaping; Windows-looking paths store `/` instead of `\`
-  so TOML does not treat `\U` as a unicode escape.
+  `JSON.stringify` for escaping.
 - **Claude:** Corrupt or non-object `~/.claude.json` (or an invalid `projects`
-  field) returns an error result and is **not** overwritten. On Windows-looking
-  paths, trust flags are written under both the native and forward-slash keys
-  because Claude matches the cwd string form.
+  field) returns an error result and is **not** overwritten.
 - **Concurrency:** Shared JSON/TOML stores use read-merge-write. Concurrent
   `agentTrustDir()` calls from multiple processes can race. Cross-process
   locking (emdash in-process lock / whip `flock`) is out of scope for this

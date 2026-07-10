@@ -19,23 +19,6 @@ export function canonicalizeWorkspacePath(workspacePath: string): string {
   return resolved;
 }
 
-/** True for drive-letter or UNC paths that must not go through POSIX resolve. */
-export function looksWindowsPath(workspacePath: string): boolean {
-  return /^[A-Za-z]:[\\/]/.test(workspacePath) || workspacePath.startsWith("\\\\");
-}
-
-/**
- * Resolve a workspace path for trust keys: realpath when present on POSIX-like
- * paths; leave Windows drive/UNC strings intact so cross-OS unit tests and
- * Windows agents are not mangled by POSIX `path.resolve`.
- */
-export function resolveWorkspaceTrustPath(workspacePath: string): string {
-  if (looksWindowsPath(workspacePath)) {
-    return workspacePath;
-  }
-  return canonicalizeWorkspacePath(workspacePath);
-}
-
 export function resolveHomeDir(
   homeDir: string | undefined,
   readHome: () => string = homedir,
