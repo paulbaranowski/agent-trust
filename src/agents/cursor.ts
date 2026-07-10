@@ -145,7 +145,8 @@ export function listCursorTrustEntries(homeDir: string): AgentTrustedDir[] {
     }
     entries.push({
       agent: "cursor",
-      dirPath: path.resolve(dirPath),
+      // Preserve Windows drive/UNC identity; do not POSIX-resolve those strings.
+      dirPath: cursorWorkspaceIdentity(dirPath),
       detail,
       store: markerPath,
     });

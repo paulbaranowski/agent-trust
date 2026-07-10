@@ -243,6 +243,26 @@ describe(listCursorTrustEntries, () => {
     );
     expect(entries).toHaveLength(3);
   });
+
+  it("preserves slash-normalized Windows workspacePath without POSIX resolve", () => {
+    const windowsPath = "C:/Users/dev/repo";
+    const slug = cursorProjectSlug(windowsPath);
+    mkdirSync(path.join(fakeHome, ".cursor", "projects", slug), { recursive: true });
+    writeFileSync(
+      path.join(fakeHome, ".cursor", "projects", slug, ".workspace-trusted"),
+      `${JSON.stringify({ workspacePath: windowsPath, trustMethod: "agent-trust" })}\n`,
+      "utf8",
+    );
+
+    expect(listCursorTrustEntries(fakeHome)).toEqual([
+      {
+        agent: "cursor",
+        dirPath: windowsPath,
+        detail: "agent-trust",
+        store: path.join(fakeHome, ".cursor", "projects", slug, ".workspace-trusted"),
+      },
+    ]);
+  });
 });
 
 describe(deleteCursorTrustEntry, () => {
