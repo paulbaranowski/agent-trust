@@ -1,5 +1,5 @@
 {
-  "name": "agent-trust",
+  "name": "@paulbaranowski/agent-trust",
   "version": "0.2.0",
   "description": "Library and CLI for Cursor, Claude, and Codex workspace trust stores",
   "license": "MIT",
@@ -42,5 +42,8 @@
     "tsup": "8.5.1",
     "typescript": "5.8.3",
     "vitest": "3.2.7"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }
