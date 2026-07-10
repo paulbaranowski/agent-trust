@@ -228,3 +228,6 @@ formatAgentTrustActionResults(results, { homeDir, action: "remove" });
 
 The public API field is always `dirPath`. Cursor’s on-disk marker still uses the key
 `workspacePath` for compatibility with existing markers.
+
+For slug rules, marker fields, list/untrust semantics, and per-agent edge cases,
+see **[Agent trust-dir markings](agent-trust-stores.md)**.
