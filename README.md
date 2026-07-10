@@ -15,7 +15,7 @@ the dialog once trust is recorded, then asks again after it is removed:
 
 ![agent-trust seeds Claude Code's directory trust so it skips the first-run trust dialog, then revokes it](media/demo.gif)
 
-_Regenerate the recording with [`vhs media/demo.tape`](media/demo.tape) ([charmbracelet/vhs](https://github.com/charmbracelet/vhs)). It drives the real `claude` binary against a throwaway `$HOME`, so it never touches your own trust stores._
+_From the repository root, regenerate the recording with [`vhs media/demo.tape`](media/demo.tape) ([charmbracelet/vhs](https://github.com/charmbracelet/vhs)). It drives the real `claude` binary against a throwaway `$HOME`, so it never touches your own trust stores._
 
 ## Install
 

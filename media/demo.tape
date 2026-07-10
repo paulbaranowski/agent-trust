@@ -13,6 +13,7 @@ Output media/demo.gif
 
 Require bash
 Require claude
+Require node
 
 Set Shell bash
 Set FontSize 20
@@ -27,8 +28,12 @@ Set Theme { "name": "agent-trust", "background": "#1a1b26", "foreground": "#c0ca
 # --- Hidden setup: isolated HOME, seeded config, CLI wired, quiet prompt. ---
 Hide
 Type `REPO="$PWD"`                                                                                     Enter
-Type `export HOME=/private/tmp/agent-trust-demo`                                                       Enter
-Type `rm -rf "$HOME" && mkdir -p "$HOME/project-alpha"`                                                Enter
+# Unique dir under the canonical /private/tmp (not the /var/folders TMPDIR
+# symlink) so realpath-based path shortening still renders ~/project-alpha;
+# the trap removes only this dir when the recording shell exits.
+Type `export HOME="$(mktemp -d /private/tmp/agent-trust-demo.XXXXXX)"`                                 Enter
+Type `trap 'rm -rf "$HOME"' EXIT`                                                                      Enter
+Type `mkdir -p "$HOME/project-alpha"`                                                                  Enter
 Type `printf '%s' '{"hasCompletedOnboarding":true,"numStartups":9,"installMethod":"native","autoUpdates":false}' > "$HOME/.claude.json"` Enter
 Type `export DISABLE_AUTOUPDATER=1 CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1 FORCE_COLOR=3`           Enter
 Type `agent-trust() { node "$REPO/bin/agent-trust.js" "$@"; }`                                         Enter
