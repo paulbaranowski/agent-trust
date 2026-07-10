@@ -13,6 +13,8 @@ export interface AgentTrustDirInput {
   dirPath: string;
   homeDir?: string;
   trustMethod?: string;
+  /** Override Codex config directory (`CODEX_HOME` / `~/.codex`). */
+  codexHome?: string;
   /** Test seam for `os.homedir()` failures. */
   readHome?: () => string;
 }
@@ -65,6 +67,9 @@ export function agentTrustDir(input: AgentTrustDirInput): AgentTrustDirResult {
     case "claude":
       return ensureClaudeTrust(args);
     case "codex":
-      return ensureCodexTrust(args);
+      return ensureCodexTrust({
+        ...args,
+        ...(input.codexHome === undefined ? {} : { codexHome: input.codexHome }),
+      });
   }
 }

@@ -30,6 +30,22 @@ export function resolveHomeDir(
   }
 }
 
+/** Resolve Codex config home: explicit override → `CODEX_HOME` → `~/.codex`. */
+export function resolveCodexHome(input: {
+  homeDir: string;
+  codexHome?: string;
+  env?: NodeJS.ProcessEnv;
+}): string {
+  if (input.codexHome !== undefined && input.codexHome.trim() !== "") {
+    return path.resolve(input.codexHome);
+  }
+  const fromEnv = (input.env ?? process.env).CODEX_HOME;
+  if (fromEnv !== undefined && fromEnv.trim() !== "") {
+    return path.resolve(fromEnv);
+  }
+  return path.join(input.homeDir, ".codex");
+}
+
 /** Write `contents` to `filePath` atomically via a temp file + rename with mode 0o600. */
 export function writeFileAtomic(filePath: string, contents: string): void {
   mkdirSync(path.dirname(filePath), { recursive: true });
