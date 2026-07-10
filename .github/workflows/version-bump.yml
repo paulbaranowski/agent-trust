@@ -1,0 +1,55 @@
+name: version-bump
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Require package.json version bump
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          set -euo pipefail
+          base="origin/${BASE_REF}"
+
+          # A PR needs a version bump only when it changes shipped/behavioral
+          # code. PRs touching only these paths are exempt.
+          exempt() {
+            case "$1" in
+              *.md) return 0 ;;          # README, docs/*.md, CLAUDE.md
+              .github/*) return 0 ;;     # CI / workflow changes
+              *.test.ts) return 0 ;;     # tests are not published (dist ships index + cli only)
+              .gitignore|LICENSE) return 0 ;;
+              *) return 1 ;;
+            esac
+          }
+
+          needs_bump=0
+          while IFS= read -r file; do
+            [ -z "$file" ] && continue
+            if ! exempt "$file"; then
+              echo "changed (requires bump): $file"
+              needs_bump=1
+            fi
+          done < <(git diff --name-only "$base"...HEAD)
+
+          if [ "$needs_bump" -eq 0 ]; then
+            echo "Only exempt files changed; version bump not required."
+            exit 0
+          fi
+
+          base_version=$(git show "$base:package.json" | node -pe 'JSON.parse(require("fs").readFileSync(0,"utf8")).version')
+          head_version=$(node -pe 'require("./package.json").version')
+
+          if [ "$(npx --yes semver "$head_version" -r ">$base_version")" != "$head_version" ]; then
+            echo "::error::package.json version not bumped: base=$base_version head=$head_version. Run 'npm version patch|minor|major'."
+            exit 1
+          fi
+          echo "OK: version bumped $base_version -> $head_version"
