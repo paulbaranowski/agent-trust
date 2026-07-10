@@ -208,6 +208,16 @@ describe(formatAgentTrustedDirList, () => {
       "No stale workspace trust entries.",
     );
   });
+
+  it("scopes empty messages to a directory path when provided", () => {
+    const dirPath = path.join(fakeHome, "ws");
+    expect(formatAgentTrustedDirList([], { homeDir: fakeHome, dirPath })).toBe(
+      `No workspace trust entries for ${shortenDirPath(dirPath, fakeHome)}.`,
+    );
+    expect(
+      formatAgentTrustedDirList([], { homeDir: fakeHome, dirPath, missingOnly: true }),
+    ).toBe(`No stale workspace trust entries for ${shortenDirPath(dirPath, fakeHome)}.`);
+  });
 });
 
 describe(formatAgentTrustActionResults, () => {

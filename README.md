@@ -57,7 +57,7 @@ Codex `config.toml`): **[Agent trust-dir markings](docs/agent-trust-stores.md)**
 ## CLI
 
 ```
-agent-trust list [--agent cursor|claude|codex] [--missing] [--home <dir>]
+agent-trust list [PATH] [--agent cursor|claude|codex] [--missing] [--home <dir>]
 agent-trust add --agent <agent> [--dir <abs>] [--home <dir>] [--trust-method <value>]
 agent-trust remove (--all | --path <abs> | --prefix <dir>)
   [--agent cursor|claude|codex] [--trust-method <value>] [--home <dir>]
@@ -69,10 +69,12 @@ agent-trust prune [--agent cursor|claude|codex] [--home <dir>]
 Shows trusted directories recorded for Cursor, Claude, and Codex. Paths under
 your home directory are shortened with `~`. Missing paths (directory gone from
 disk) are marked. Use `--agent` to limit to one agent, or `--missing` to show
-only stale entries.
+only stale entries. Pass an optional `PATH` (for example `.`) to show only
+entries for that exact directory after path canonicalization.
 
 ```bash
 agent-trust list
+agent-trust list .
 agent-trust list --agent claude
 agent-trust list --missing
 ```

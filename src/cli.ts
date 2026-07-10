@@ -15,7 +15,7 @@ import { pruneAgentTrustedDirs } from "./pruneAgentTrustedDirs.ts";
 import type { AgentTrustAgent } from "./types.ts";
 
 const USAGE = `Usage:
-  agent-trust list [--agent cursor|claude|codex] [--missing] [--home <dir>]
+  agent-trust list [PATH] [--agent cursor|claude|codex] [--missing] [--home <dir>]
   agent-trust add --agent <cursor|cursor-agent|claude|codex> [--dir <abs>] [--home <dir>] [--trust-method <value>]
   agent-trust remove (--all | --path <abs> | --prefix <dir>)
     [--agent cursor|claude|codex] [--trust-method <value>] [--home <dir>]
@@ -23,6 +23,7 @@ const USAGE = `Usage:
 
 Examples:
   agent-trust list
+  agent-trust list .
   agent-trust list --missing
   agent-trust add --agent claude --dir "$PWD"
   agent-trust add --agent codex --dir "$PWD"
@@ -43,6 +44,8 @@ interface ParsedArguments {
   agent?: AgentTrustAgent;
   homeDir: string;
   dirPath?: string;
+  /** Optional positional path for `list` (exact-match filter). */
+  listPath?: string;
   path?: string;
   pathPrefix?: string;
   trustMethod?: string;
@@ -117,6 +120,13 @@ function applyArgument(
       throw new CliExitError(USAGE, 0);
     }
     default: {
+      if (!arg.startsWith("-") && parsed.command === "list") {
+        if (parsed.listPath !== undefined) {
+          throw new Error(`Unexpected argument: ${arg}\n\n${USAGE}`);
+        }
+        parsed.listPath = arg;
+        return index;
+      }
       throw new Error(`Unknown argument: ${arg}\n\n${USAGE}`);
     }
   }
@@ -180,15 +190,21 @@ export function main(argv: readonly string[]): void {
   const parsed = parseArguments(argv);
 
   if (parsed.command === "list") {
+    const listDirPath =
+      parsed.listPath === undefined
+        ? undefined
+        : resolveDirPath({ dirPath: parsed.listPath });
     const entries = listAgentTrustedDirs({
       homeDir: parsed.homeDir,
       missingOnly: parsed.missingOnly,
       ...(parsed.agent === undefined ? {} : { agent: parsed.agent }),
+      ...(listDirPath === undefined ? {} : { dirPath: listDirPath }),
     });
     console.log(
       formatAgentTrustedDirList(entries, {
         homeDir: parsed.homeDir,
         missingOnly: parsed.missingOnly,
+        ...(listDirPath === undefined ? {} : { dirPath: listDirPath }),
       }),
     );
     return;

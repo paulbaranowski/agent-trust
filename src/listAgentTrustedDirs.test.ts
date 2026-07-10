@@ -1,10 +1,11 @@
-import { chmodSync, mkdirSync, mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, symlinkSync, writeFileSync, rmSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { codexProjectTableHeader } from "./agents/codex.ts";
 import { cursorProjectSlug } from "./agents/cursor.ts";
+import { canonicalizeWorkspacePath } from "./agents/shared.ts";
 import { isMissingAgentTrustedDir, listAgentTrustedDirs } from "./listAgentTrustedDirs.ts";
 
 describe(listAgentTrustedDirs, () => {
@@ -74,6 +75,70 @@ describe(listAgentTrustedDirs, () => {
 
     expect(listAgentTrustedDirs({ homeDir: fakeHome, missingOnly: true })).toEqual([
       expect.objectContaining({ agent: "claude", dirPath: missingPath }),
+    ]);
+  });
+
+  it("filters to an exact directory path", () => {
+    const target = path.resolve(fakeHome, "target");
+    const other = path.resolve(fakeHome, "other");
+    mkdirSync(target, { recursive: true });
+    mkdirSync(other, { recursive: true });
+    writeFileSync(
+      path.join(fakeHome, ".claude.json"),
+      JSON.stringify({
+        projects: {
+          [target]: { hasTrustDialogAccepted: true },
+          [other]: { hasTrustDialogAccepted: true },
+        },
+      }),
+      "utf8",
+    );
+
+    expect(listAgentTrustedDirs({ homeDir: fakeHome, dirPath: target })).toEqual([
+      expect.objectContaining({
+        agent: "claude",
+        dirPath: canonicalizeWorkspacePath(target),
+      }),
+    ]);
+  });
+
+  it("does not match a parent directory when filtering by dirPath", () => {
+    const parent = path.resolve(fakeHome, "parent");
+    const child = path.join(parent, "child");
+    mkdirSync(child, { recursive: true });
+    writeFileSync(
+      path.join(fakeHome, ".claude.json"),
+      JSON.stringify({
+        projects: {
+          [parent]: { hasTrustDialogAccepted: true },
+        },
+      }),
+      "utf8",
+    );
+
+    expect(listAgentTrustedDirs({ homeDir: fakeHome, dirPath: child })).toEqual([]);
+  });
+
+  it("matches a symlink alias to the same canonical path", () => {
+    const realDir = path.resolve(fakeHome, "real-ws");
+    const linkDir = path.resolve(fakeHome, "alias-ws");
+    mkdirSync(realDir, { recursive: true });
+    symlinkSync(realDir, linkDir);
+    writeFileSync(
+      path.join(fakeHome, ".claude.json"),
+      JSON.stringify({
+        projects: {
+          [realDir]: { hasTrustDialogAccepted: true },
+        },
+      }),
+      "utf8",
+    );
+
+    expect(listAgentTrustedDirs({ homeDir: fakeHome, dirPath: linkDir })).toEqual([
+      expect.objectContaining({
+        agent: "claude",
+        dirPath: canonicalizeWorkspacePath(realDir),
+      }),
     ]);
   });
 
