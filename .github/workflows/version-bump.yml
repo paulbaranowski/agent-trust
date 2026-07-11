@@ -24,6 +24,7 @@ jobs:
           exempt() {
             case "$1" in
               *.md) return 0 ;;          # README, docs/*.md, CLAUDE.md
+              media/*) return 0 ;;       # demo GIF / screenshot / tape (not shipped)
               .github/*) return 0 ;;     # CI / workflow changes
               *.test.ts) return 0 ;;     # tests are not published (dist ships index + cli only)
               .gitignore|LICENSE) return 0 ;;
