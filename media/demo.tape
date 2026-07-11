@@ -29,10 +29,13 @@ Set Theme { "name": "agent-trust", "background": "#1a1b26", "foreground": "#c0ca
 Hide
 Type `REPO="$PWD"`                                                                                     Enter
 # Unique dir under the canonical /private/tmp (not the /var/folders TMPDIR
-# symlink) so realpath-based path shortening still renders ~/project-alpha;
-# the trap removes only this dir when the recording shell exits.
-Type `export HOME="$(mktemp -d /private/tmp/agent-trust-demo.XXXXXX)"`                                 Enter
-Type `trap 'rm -rf "$HOME"' EXIT`                                                                      Enter
+# symlink) so realpath-based path shortening still renders ~/project-alpha.
+# Abort if mktemp fails: an empty $HOME makes os.homedir() fall back to the real
+# home, and agent-trust would then touch live trust stores. The trap removes
+# only the created dir when the recording shell exits.
+Type `DEMOHOME="$(mktemp -d /private/tmp/agent-trust-demo.XXXXXX)" || exit 1`                          Enter
+Type `export HOME="$DEMOHOME"`                                                                         Enter
+Type `trap 'rm -rf "$DEMOHOME"' EXIT`                                                                  Enter
 Type `mkdir -p "$HOME/project-alpha"`                                                                  Enter
 Type `printf '%s' '{"hasCompletedOnboarding":true,"numStartups":9,"installMethod":"native","autoUpdates":false}' > "$HOME/.claude.json"` Enter
 Type `export DISABLE_AUTOUPDATER=1 CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1 FORCE_COLOR=3`           Enter
